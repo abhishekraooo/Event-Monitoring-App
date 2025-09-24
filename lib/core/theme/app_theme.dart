@@ -6,18 +6,20 @@ import 'package:google_fonts/google_fonts.dart';
 class AppTheme {
   static ThemeData get lightTheme {
     return ThemeData(
-      // 1. Set the default brightness and colors.
-      brightness: Brightness.light,
-      primaryColor: Colors.black,
-      scaffoldBackgroundColor: Colors.white,
+      useMaterial3: true,
 
-      // 2. Define the font family.
-      textTheme: GoogleFonts.quicksandTextTheme(ThemeData.light().textTheme),
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: Colors.black,
+        brightness: Brightness.light,
+        background: Colors.white,
+        surface: const Color(0xFFFDFDFD),
+      ),
 
-      // 3. Define the AppBar theme.
+      textTheme: GoogleFonts.quicksandTextTheme(),
+
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.black,
-        foregroundColor: Colors.white, // For title text and icons
+        foregroundColor: Colors.white,
         elevation: 2,
         titleTextStyle: GoogleFonts.quicksand(
           fontSize: 20,
@@ -25,20 +27,17 @@ class AppTheme {
         ),
       ),
 
-      // 4. Define the Card theme.
       cardTheme: CardThemeData(
+        // ADD THIS LINE to explicitly set the card background to off-white
+        color: const Color(0xFFFDFDFD),
         elevation: 1.5,
-        color: const Color(0xFFFDFDFD), // A very slight off-white
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8.0),
-          side: const BorderSide(
-            color: Color(0xFFE0E0E0), // Subtle border
-            width: 1,
-          ),
+          side: BorderSide(color: Colors.grey.shade300, width: 1),
         ),
       ),
 
-      // 5. Define the ElevatedButton theme.
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.black,
@@ -54,23 +53,32 @@ class AppTheme {
         ),
       ),
 
-      // 6. Define the InputDecoration theme for text fields.
       inputDecorationTheme: InputDecorationTheme(
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.0)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8.0),
+          borderSide: BorderSide(color: Colors.grey.shade400),
+        ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8.0),
           borderSide: const BorderSide(color: Colors.black, width: 2.0),
         ),
-        labelStyle: const TextStyle(color: Colors.black54),
+        labelStyle: TextStyle(color: Colors.grey.shade700),
       ),
 
-      // 7. Define the Chip theme
       chipTheme: ChipThemeData(
         backgroundColor: Colors.grey.shade200,
         selectedColor: Colors.black,
         labelStyle: const TextStyle(color: Colors.black),
         secondaryLabelStyle: const TextStyle(color: Colors.white),
         padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+      ),
+
+      navigationRailTheme: const NavigationRailThemeData(
+        backgroundColor: Color(0xFFFDFDFD),
+        selectedIconTheme: IconThemeData(color: Colors.black),
+        unselectedIconTheme: IconThemeData(color: Colors.grey),
+        selectedLabelTextStyle: TextStyle(color: Colors.black),
+        indicatorColor: Color(0xFFEEEEEE),
       ),
     );
   }

@@ -1,10 +1,10 @@
 // lib/main.dart
 
+import 'package:event_management_app/features/coordinator/auth/coordinator_auth_gate.dart';
 import 'package:flutter/foundation.dart'; // Import to check for release mode
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:event_management_app/core/theme/app_theme.dart';
-import 'package:event_management_app/features/role_selection/role_selection_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 Future<void> main() async {
@@ -46,7 +46,7 @@ class MyApp extends StatelessWidget {
       title: 'Ideathon 2025 Monitor',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      home: const RoleSelectionScreen(),
+      home: const CoordinatorAuthGate(),
     );
   }
 }
