@@ -27,14 +27,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     int count = 0;
     if (team['team_lead_name'] != null) count++;
     if (team['member_1_name'] != null &&
-        (team['member_1_name'] as String).isNotEmpty)
+        (team['member_1_name'] as String).isNotEmpty) {
       count++;
+    }
     if (team['member_2_name'] != null &&
-        (team['member_2_name'] as String).isNotEmpty)
+        (team['member_2_name'] as String).isNotEmpty) {
       count++;
+    }
     if (team['member_3_name'] != null &&
-        (team['member_3_name'] as String).isNotEmpty)
+        (team['member_3_name'] as String).isNotEmpty) {
       count++;
+    }
     return count;
   }
 

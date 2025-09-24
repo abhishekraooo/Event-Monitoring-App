@@ -1,7 +1,9 @@
 // lib/features/coordinator/shared/main_layout.dart
 
-import 'package:event_management_app/features/coordinator/dashboard/dashboard_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:event_management_app/main.dart';
+import 'package:event_management_app/features/coordinator/dashboard/dashboard_screen.dart';
+import 'package:event_management_app/features/coordinator/teams/teams_screen.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -13,19 +15,14 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   int _selectedIndex = 0;
 
-  // This list holds the different screens for your app.
-  // We'll add more screens here as we build them.
   static const List<Widget> _screens = <Widget>[
-    DashboardScreen(), // Index 0
-    // Placeholder for Teams Screen
-    Center(child: Text('All Registrations Screen (coming soon)')), // Index 1
-    // Placeholder for Admin Screen
-    Center(child: Text('Admin Panel (coming soon)')), // Index 2
+    DashboardScreen(),
+    TeamsScreen(),
+    Center(child: Text('Admin Panel (coming soon)')),
   ];
 
   @override
   Widget build(BuildContext context) {
-    // LayoutBuilder helps us decide which layout to show based on screen width
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth > 640) {
@@ -59,9 +56,22 @@ class _MainLayoutState extends State<MainLayout> {
                       label: Text('Admin'),
                     ),
                   ],
+                  // NEW: Adds the sign out button to the bottom of the rail.
+                  trailing: Expanded(
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 20.0),
+                        child: IconButton(
+                          icon: const Icon(Icons.logout),
+                          tooltip: 'Sign Out',
+                          onPressed: () => supabase.auth.signOut(),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
                 const VerticalDivider(thickness: 1, width: 1),
-                // Main content area
                 Expanded(child: _screens.elementAt(_selectedIndex)),
               ],
             ),
@@ -69,7 +79,10 @@ class _MainLayoutState extends State<MainLayout> {
         } else {
           // NARROW SCREEN LAYOUT (Mobile)
           return Scaffold(
-            appBar: AppBar(title: const Text('Ideathon Monitor')),
+            appBar: AppBar(
+              title: const Text('Ideathon Monitor'),
+              // We remove the old logout button from here to avoid duplication.
+            ),
             drawer: Drawer(
               child: ListView(
                 padding: EdgeInsets.zero,
@@ -87,7 +100,7 @@ class _MainLayoutState extends State<MainLayout> {
                     selected: _selectedIndex == 0,
                     onTap: () {
                       setState(() => _selectedIndex = 0);
-                      Navigator.pop(context); // Close the drawer
+                      Navigator.pop(context);
                     },
                   ),
                   ListTile(
@@ -106,6 +119,16 @@ class _MainLayoutState extends State<MainLayout> {
                     onTap: () {
                       setState(() => _selectedIndex = 2);
                       Navigator.pop(context);
+                    },
+                  ),
+                  const Divider(),
+                  // NEW: Adds the sign out button to the bottom of the drawer menu.
+                  ListTile(
+                    leading: const Icon(Icons.logout),
+                    title: const Text('Sign Out'),
+                    onTap: () {
+                      Navigator.pop(context); // Close the drawer first
+                      supabase.auth.signOut();
                     },
                   ),
                 ],
