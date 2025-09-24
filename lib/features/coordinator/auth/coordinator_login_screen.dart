@@ -1,10 +1,8 @@
 // lib/features/coordinator/auth/coordinator_login_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
-// We will create this screen in a future step.
-// import 'package:ideathon_monitor/features/coordinator/dashboard/dashboard_screen.dart';
 
 class CoordinatorLoginScreen extends StatefulWidget {
   const CoordinatorLoginScreen({super.key});
@@ -19,7 +17,6 @@ class _CoordinatorLoginScreenState extends State<CoordinatorLoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
 
-  // Your original signIn logic was solid, we'll reuse it.
   Future<void> _signIn() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -30,9 +27,7 @@ class _CoordinatorLoginScreenState extends State<CoordinatorLoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-
-      // On successful login, the AuthGate will handle navigation.
-      // We will re-introduce the AuthGate after building the dashboard.
+      // On success, the AuthGate handles navigation.
     } on AuthException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -67,31 +62,75 @@ class _CoordinatorLoginScreenState extends State<CoordinatorLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Custom InputDecoration for a dark theme
+    final darkInputDecoration = InputDecoration(
+      labelStyle: const TextStyle(color: Colors.white70),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8.0),
+        borderSide: const BorderSide(color: Colors.white38),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8.0),
+        borderSide: const BorderSide(color: Colors.white, width: 2.0),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8.0),
+        borderSide: BorderSide(color: Theme.of(context).colorScheme.error),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8.0),
+        borderSide: BorderSide(
+          color: Theme.of(context).colorScheme.error,
+          width: 2.0,
+        ),
+      ),
+    );
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Coordinator Login')),
+      backgroundColor: Colors.black,
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(32.0),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: Card(
-              // UI Improvement: Form is wrapped in a Card
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Form(
+            constraints: const BoxConstraints(maxWidth: 380),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // --- Creative Title Section ---
+                Text(
+                  'Ideathon 2025',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.quicksand(
+                    color: Colors.white,
+                    fontSize: 42,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 2,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Coordinator Portal',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.quicksand(
+                    color: Colors.white70,
+                    fontSize: 18,
+                  ),
+                ),
+                const SizedBox(height: 60),
+
+                // --- Form Section ---
+                Form(
                   key: _formKey,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        'Sign in to continue',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 24),
                       TextFormField(
                         controller: _emailController,
-                        decoration: const InputDecoration(labelText: 'Email'),
+                        style: const TextStyle(color: Colors.white),
+                        decoration: darkInputDecoration.copyWith(
+                          labelText: 'Email',
+                        ),
                         keyboardType: TextInputType.emailAddress,
                         validator: (value) {
                           if (value == null || value.isEmpty) {
@@ -100,10 +139,11 @@ class _CoordinatorLoginScreenState extends State<CoordinatorLoginScreen> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
                       TextFormField(
                         controller: _passwordController,
-                        decoration: const InputDecoration(
+                        style: const TextStyle(color: Colors.white),
+                        decoration: darkInputDecoration.copyWith(
                           labelText: 'Password',
                         ),
                         obscureText: true,
@@ -114,16 +154,21 @@ class _CoordinatorLoginScreenState extends State<CoordinatorLoginScreen> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 32),
                       ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                        ),
                         onPressed: _isLoading ? null : _signIn,
                         child: _isLoading
                             ? const SizedBox(
                                 height: 20,
                                 width: 20,
                                 child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2.0,
+                                  color: Colors.black,
+                                  strokeWidth: 2.5,
                                 ),
                               )
                             : const Text('Sign In'),
@@ -131,7 +176,7 @@ class _CoordinatorLoginScreenState extends State<CoordinatorLoginScreen> {
                     ],
                   ),
                 ),
-              ),
+              ],
             ),
           ),
         ),
