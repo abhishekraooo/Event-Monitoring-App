@@ -19,7 +19,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _fetchRegistrations() async {
-    return await supabase.from('registrations').select();
+    // We get all active teams, sorted by code
+    return await supabase
+        .from('registrations')
+        .select()
+        .eq('status', 'active')
+        .order('team_code', ascending: true)
+        .limit(10000);
   }
 
   // Helper function to calculate team size
@@ -27,17 +33,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     int count = 0;
     if (team['team_lead_name'] != null) count++;
     if (team['member_1_name'] != null &&
-        (team['member_1_name'] as String).isNotEmpty) {
+        (team['member_1_name'] as String).isNotEmpty)
       count++;
-    }
     if (team['member_2_name'] != null &&
-        (team['member_2_name'] as String).isNotEmpty) {
+        (team['member_2_name'] as String).isNotEmpty)
       count++;
-    }
     if (team['member_3_name'] != null &&
-        (team['member_3_name'] as String).isNotEmpty) {
+        (team['member_3_name'] as String).isNotEmpty)
       count++;
-    }
     return count;
   }
 
@@ -76,21 +79,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             .where((t) => t['participation_format'] == 'Solo')
             .length;
 
-        // New Stat: Top Colleges
-        final collegeCounts = <String, int>{};
-        for (var team in registrations) {
-          final college = team['team_lead_college'] as String? ?? 'Unknown';
-          collegeCounts[college] = (collegeCounts[college] ?? 0) + 1;
-        }
-
-        // New Stat: Team Sizes
-        final teamSizeCounts = <int, int>{1: 0, 2: 0, 3: 0, 4: 0};
-        for (var team in registrations) {
-          final size = _getTeamSize(team);
-          if (teamSizeCounts.containsKey(size)) {
-            teamSizeCounts[size] = teamSizeCounts[size]! + 1;
-          }
-        }
+        // NEW: Calculate total participants by summing up the size of each team
+        final totalParticipants = registrations.fold<int>(
+          0,
+          (sum, team) => sum + _getTeamSize(team),
+        );
 
         return ListView(
           padding: const EdgeInsets.all(24.0),
@@ -112,6 +105,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   icon: Icons.groups,
                   color: Colors.blue.shade700,
                 ),
+                // NEW: StatCard for Total Participants
+                StatCard(
+                  title: 'Total Participants',
+                  value: totalParticipants.toString(),
+                  icon: Icons.person_pin_rounded,
+                  color: Colors.teal.shade700,
+                ),
+                StatCard(
+                  title: 'Teams Checked In',
+                  value: '$checkedInTeams / $totalTeams',
+                  icon: Icons.how_to_reg,
+                  color: Colors.green.shade700,
+                ),
                 StatCard(
                   title: 'Abstracts Submitted',
                   value: '$abstractsSubmitted / $totalTeams',
@@ -120,33 +126,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 StatCard(
                   title: 'Solo Teams',
-                  value: '$soloTeams / $totalTeams',
+                  value: soloTeams.toString(),
                   icon: Icons.person,
                   color: Colors.purple.shade700,
                 ),
-                StatCard(
-                  title: 'Teams Checked In',
-                  value: '$checkedInTeams / $totalTeams',
-                  icon: Icons.how_to_reg,
-                  color: Colors.green.shade700,
-                ),
               ],
             ),
-            const SizedBox(height: 24),
-            const Divider(),
-            const SizedBox(height: 16),
+            // We removed the divider and other list tiles for now to keep the dashboard focused on stats.
           ],
         );
       },
     );
   }
-
-  // A new widget to display the Top Colleges leaderboard
-
-  // A new widget to display the Team Size breakdown
 }
 
-// Reusable StatCard widget (no changes here)
+// Reusable StatCard widget
 class StatCard extends StatelessWidget {
   final String title;
   final String value;
