@@ -85,12 +85,15 @@ class _AdminScreenState extends State<AdminScreen> {
                 value: null,
                 child: Text('-- Unassign --'),
               ),
-              ..._allCoordinators.map(
-                (c) => DropdownMenuItem<String>(
+              ..._allCoordinators.map((c) {
+                // FIX: Added a null check to handle coordinators with no name.
+                final coordinatorName =
+                    c['full_name'] as String? ?? 'Unnamed Coordinator';
+                return DropdownMenuItem<String>(
                   value: c['id'],
-                  child: Text(c['full_name']),
-                ),
-              ),
+                  child: Text(coordinatorName),
+                );
+              }),
             ],
             onChanged: (value) => selectedCoordinatorId = value,
           ),
