@@ -27,4 +27,29 @@ class DatabaseService {
         .eq('id', teamId)
         .single();
   }
+
+  /// Updates a registration record in the database.
+  Future<void> updateRegistration(
+    int teamId,
+    Map<String, dynamic> dataToUpdate,
+  ) async {
+    await supabase.from('registrations').update(dataToUpdate).eq('id', teamId);
+  }
+
+  /// Fetches a list of all coordinators (id and full_name).
+  Future<List<Map<String, dynamic>>> getAllCoordinators() async {
+    return await supabase.from('coordinators').select('id, full_name');
+  }
+
+  /// Assigns a coordinator to a list of teams in a single operation.
+  /// Pass null for coordinatorId to unassign.
+  Future<void> bulkAssignCoordinator(
+    List<int> teamIds,
+    String? coordinatorId,
+  ) async {
+    await supabase
+        .from('registrations')
+        .update({'assigned_coordinator_id': coordinatorId})
+        .inFilter('id', teamIds);
+  }
 }

@@ -1,6 +1,8 @@
 // lib/features/coordinator/teams/teams_screen.dart
 
 import 'dart:async';
+import 'package:event_management_app/core/utils/snackbar_utils.dart';
+import 'package:event_management_app/features/coordinator/scanner/qr_scanner_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:event_management_app/main.dart';
 import 'package:event_management_app/features/coordinator/teams/team_detail_screen.dart';
@@ -45,8 +47,76 @@ class _TeamsScreenState extends State<TeamsScreen> {
     }
   }
 
+  // REFACTORED: This method is now much cleaner
   Future<void> _openScanner() async {
-    /* ... same as before ... */
+    final scannedCode = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (context) => const QRScannerScreen()),
+    );
+
+    if (scannedCode == null || !mounted) return;
+
+    final team = _allRegistrations.firstWhere(
+      (t) => t['team_code'] == scannedCode,
+      orElse: () => {},
+    );
+    if (team.isEmpty) {
+      showFeedbackSnackbar(
+        context,
+        'Error: Team code "$scannedCode" not found.',
+        type: FeedbackType.error,
+      );
+      return;
+    }
+    if (team['is_checked_in'] == true) {
+      showFeedbackSnackbar(
+        context,
+        'Team "${team['team_name']}" is already checked in.',
+        type: FeedbackType.info,
+      ); // Use .info for neutral messages
+      return;
+    }
+
+    final bool? confirm = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Check-in'),
+        content: Text(
+          'Do you want to check in Team "${team['team_name']}" (${team['team_code']})?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Check In'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await supabase
+            .from('registrations')
+            .update({'is_checked_in': true})
+            .eq('team_code', scannedCode);
+        showFeedbackSnackbar(
+          context,
+          'Successfully checked in ${team['team_name']}!',
+          type: FeedbackType.success,
+        );
+        _fetchRegistrations();
+      } catch (e) {
+        showFeedbackSnackbar(
+          context,
+          'An error occurred: ${e.toString()}',
+          type: FeedbackType.error,
+        );
+      }
+    }
   }
 
   // Updated to be debounced for better performance
