@@ -1,10 +1,11 @@
 // lib/features/coordinator/teams/teams_screen.dart
 
 import 'dart:async';
-import 'package:event_management_app/core/utils/snackbar_utils.dart';
 import 'package:event_management_app/features/coordinator/scanner/qr_scanner_screen.dart';
-import 'package:flutter/material.dart';
 import 'package:event_management_app/main.dart';
+import 'package:flutter/material.dart';
+import 'package:event_management_app/core/services/database_service.dart';
+import 'package:event_management_app/core/utils/snackbar_utils.dart';
 import 'package:event_management_app/features/coordinator/teams/team_detail_screen.dart';
 
 class TeamsScreen extends StatefulWidget {
@@ -14,9 +15,12 @@ class TeamsScreen extends StatefulWidget {
 }
 
 class _TeamsScreenState extends State<TeamsScreen> {
+  final DatabaseService _dbService = DatabaseService();
   List<Map<String, dynamic>> _allRegistrations = [];
   List<Map<String, dynamic>> _filteredRegistrations = [];
   bool _isLoading = true;
+  String _userRole = 'coordinator';
+  _TeamDataSource? _dataSource;
 
   final _searchController = TextEditingController();
   Timer? _debounce;
@@ -30,24 +34,82 @@ class _TeamsScreenState extends State<TeamsScreen> {
 
   Future<void> _fetchRegistrations() async {
     if (mounted) setState(() => _isLoading = true);
+    try {
+      final role = await _dbService.getCurrentUserRole();
+      final data = await supabase
+          .from('registrations')
+          .select()
+          .eq('status', 'active')
+          .order('team_code', ascending: true)
+          .limit(10000);
 
-    // THE FIX: Add .order() to set a default sort order
-    final data = await supabase
-        .from('registrations')
-        .select()
-        .order('team_code', ascending: true) // Sort by team_code by default
-        .limit(10000);
-
-    if (mounted) {
-      setState(() {
-        _allRegistrations = data;
-        _filterRegistrations(isFetching: true);
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _userRole = role;
+          _allRegistrations = data;
+          _filterRegistrations(isFetching: true);
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        showFeedbackSnackbar(
+          context,
+          'Error fetching data: $e',
+          type: FeedbackType.error,
+        );
+        setState(() => _isLoading = false);
+      }
     }
   }
 
-  // REFACTORED: This method is now much cleaner
+  void _filterRegistrations({bool isFetching = false}) {
+    if (isFetching) {
+      _performFilter();
+      return;
+    }
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(
+      const Duration(milliseconds: 400),
+      () => _performFilter(),
+    );
+  }
+
+  void _performFilter() {
+    final query = _searchController.text.toLowerCase();
+    setState(() {
+      _filteredRegistrations = _allRegistrations.where((team) {
+        return (team['team_name'] as String? ?? '').toLowerCase().contains(
+              query,
+            ) ||
+            (team['team_code'] as String? ?? '').toLowerCase().contains(
+              query,
+            ) ||
+            (team['team_lead_name'] as String? ?? '').toLowerCase().contains(
+              query,
+            );
+      }).toList();
+      _dataSource = _createDataSource();
+    });
+  }
+
+  _TeamDataSource _createDataSource() {
+    return _TeamDataSource(
+      data: _filteredRegistrations,
+      context: context,
+      userRole: _userRole,
+      onTapRow: (teamId) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => TeamDetailScreen(teamId: teamId),
+          ),
+        ).then((_) => _fetchRegistrations());
+      },
+      onDelete: (team) => _showDeleteConfirmation(team),
+    );
+  }
+
   Future<void> _openScanner() async {
     final scannedCode = await Navigator.push<String>(
       context,
@@ -60,6 +122,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
       (t) => t['team_code'] == scannedCode,
       orElse: () => {},
     );
+
     if (team.isEmpty) {
       showFeedbackSnackbar(
         context,
@@ -68,12 +131,13 @@ class _TeamsScreenState extends State<TeamsScreen> {
       );
       return;
     }
+
     if (team['is_checked_in'] == true) {
       showFeedbackSnackbar(
         context,
         'Team "${team['team_name']}" is already checked in.',
         type: FeedbackType.info,
-      ); // Use .info for neutral messages
+      );
       return;
     }
 
@@ -119,35 +183,41 @@ class _TeamsScreenState extends State<TeamsScreen> {
     }
   }
 
-  // Updated to be debounced for better performance
-  void _filterRegistrations({bool isFetching = false}) {
-    // If we're filtering immediately after a fetch, don't debounce.
-    if (isFetching) {
-      _performFilter();
-      return;
+  Future<void> _showDeleteConfirmation(Map<String, dynamic> team) async {
+    final bool? confirm = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Deletion'),
+        content: Text(
+          'Are you sure you want to delete Team "${team['team_name']}"? This will mark the team as inactive.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _dbService.deleteTeam(team['id']);
+        showFeedbackSnackbar(
+          context,
+          'Team deleted successfully!',
+          type: FeedbackType.success,
+        );
+        _fetchRegistrations();
+      } catch (e) {
+        showFeedbackSnackbar(context, 'Error: $e', type: FeedbackType.error);
+      }
     }
-
-    if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 400), () {
-      _performFilter();
-    });
-  }
-
-  void _performFilter() {
-    final query = _searchController.text.toLowerCase();
-    setState(() {
-      _filteredRegistrations = _allRegistrations.where((team) {
-        return (team['team_name'] as String? ?? '').toLowerCase().contains(
-              query,
-            ) ||
-            (team['team_code'] as String? ?? '').toLowerCase().contains(
-              query,
-            ) ||
-            (team['team_lead_name'] as String? ?? '').toLowerCase().contains(
-              query,
-            );
-      }).toList();
-    });
   }
 
   @override
@@ -159,109 +229,146 @@ class _TeamsScreenState extends State<TeamsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    if (!_isLoading && _dataSource == null) {
+      _dataSource = _createDataSource();
+    }
+
+    // FIX: Replaced Column with a ListView for vertical scrolling.
+    return ListView(
       padding: const EdgeInsets.all(24.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                'All Registrations',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              'All Registrations',
+              style: Theme.of(
+                context,
+              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const Spacer(),
+            IconButton(
+              onPressed: _openScanner,
+              icon: const Icon(Icons.qr_code_scanner),
+              iconSize: 32,
+              tooltip: 'Scan to Check In',
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _searchController,
+                decoration: const InputDecoration(
+                  labelText: 'Search by Team, Code, or Lead',
+                  prefixIcon: Icon(Icons.search),
+                  isDense: true,
                 ),
               ),
-              const Spacer(),
-              ElevatedButton.icon(
-                onPressed: _openScanner,
-                icon: const Icon(Icons.qr_code_scanner),
-                label: const Text('Scan to Check In'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          // NEW: Search bar and refresh button in a Row
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _searchController,
-                  decoration: const InputDecoration(
-                    labelText: 'Search by Team, Code, or Lead',
-                    prefixIcon: Icon(Icons.search),
-                    isDense: true,
-                  ),
+            ),
+            const SizedBox(width: 16),
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Refresh Data',
+              onPressed: _fetchRegistrations,
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        // FIX: PaginatedDataTable is now a direct child of the scrollable ListView.
+        // The Expanded widget is no longer needed.
+        _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(color: Colors.black),
+              )
+            : PaginatedDataTable(
+                header: Text(
+                  'Registered Teams (${_filteredRegistrations.length})',
                 ),
+                rowsPerPage: 20,
+                showCheckboxColumn: false,
+                columns: [
+                  const DataColumn(label: Text('Team Code')),
+                  const DataColumn(label: Text('Team Name')),
+                  const DataColumn(label: Text('Lead Name')),
+                  const DataColumn(label: Text('College')),
+                  const DataColumn(label: Text('Checked In')),
+                  const DataColumn(label: Text('Abstract')),
+                  if (_userRole == 'admin')
+                    const DataColumn(label: Text('Actions')),
+                ],
+                source: _dataSource!,
               ),
-              const SizedBox(width: 16),
-              IconButton(
-                icon: const Icon(Icons.refresh),
-                tooltip: 'Refresh Data',
-                onPressed: _fetchRegistrations,
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: _isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(color: Colors.black),
-                  )
-                : SingleChildScrollView(
-                    scrollDirection: Axis.vertical,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      // DataTable is now wider for better spacing on web
-                      child: DataTable(
-                        columnSpacing: 32, // Added spacing
-                        // REMOVED: sortColumnIndex and sortAscending
-                        columns: const [
-                          // REMOVED: onSort callbacks
-                          DataColumn(label: Text('Team Code')),
-                          DataColumn(label: Text('Team Name')),
-                          DataColumn(label: Text('Lead Name')),
-                          DataColumn(label: Text('College')),
-                          DataColumn(label: Text('Checked In')),
-                        ],
-                        rows: _filteredRegistrations.map((team) {
-                          return DataRow(
-                            cells: [
-                              DataCell(Text(team['team_code'] ?? '')),
-                              DataCell(Text(team['team_name'] ?? '')),
-                              DataCell(Text(team['team_lead_name'] ?? '')),
-                              DataCell(Text(team['team_lead_college'] ?? '')),
-                              DataCell(
-                                Icon(
-                                  team['is_checked_in'] == true
-                                      ? Icons.check_circle
-                                      : Icons.cancel,
-                                  color: team['is_checked_in'] == true
-                                      ? Colors.green
-                                      : Colors.grey,
-                                ),
-                              ),
-                            ],
-                            onSelectChanged: (selected) {
-                              if (selected == true) {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        TeamDetailScreen(teamId: team['id']),
-                                  ),
-                                );
-                              }
-                            },
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  ),
-          ),
-        ],
-      ),
+      ],
     );
   }
+}
+
+class _TeamDataSource extends DataTableSource {
+  final List<Map<String, dynamic>> data;
+  final BuildContext context;
+  final String userRole;
+  final Function(int teamId) onTapRow;
+  final Function(Map<String, dynamic> team) onDelete;
+
+  _TeamDataSource({
+    required this.data,
+    required this.context,
+    required this.userRole,
+    required this.onTapRow,
+    required this.onDelete,
+  });
+
+  @override
+  DataRow? getRow(int index) {
+    if (index >= data.length) return null;
+
+    final team = data[index];
+    final hasAbstract =
+        team['idea_abstract'] != null &&
+        (team['idea_abstract'] as String).isNotEmpty;
+
+    return DataRow(
+      onSelectChanged: (selected) {
+        if (selected == true) onTapRow(team['id']);
+      },
+      cells: [
+        DataCell(Text(team['team_code'] ?? '')),
+        DataCell(Text(team['team_name'] ?? '')),
+        DataCell(Text(team['team_lead_name'] ?? '')),
+        DataCell(Text(team['team_lead_college'] ?? '')),
+        DataCell(
+          Icon(
+            team['is_checked_in'] == true ? Icons.check_circle : Icons.cancel,
+            color: team['is_checked_in'] == true ? Colors.green : Colors.grey,
+          ),
+        ),
+        DataCell(
+          Icon(
+            hasAbstract ? Icons.check_circle : Icons.cancel,
+            color: hasAbstract ? Colors.green : Colors.grey,
+          ),
+        ),
+        if (userRole == 'admin')
+          DataCell(
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.red),
+              tooltip: 'Delete Team',
+              onPressed: () => onDelete(team),
+            ),
+          ),
+      ],
+    );
+  }
+
+  @override
+  bool get isRowCountApproximate => false;
+
+  @override
+  int get rowCount => data.length;
+
+  @override
+  int get selectedRowCount => 0;
 }

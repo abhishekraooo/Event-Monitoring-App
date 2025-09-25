@@ -52,4 +52,12 @@ class DatabaseService {
         .update({'assigned_coordinator_id': coordinatorId})
         .inFilter('id', teamIds);
   }
+
+  /// Soft deletes a team by setting its status to 'inactive'.
+  Future<void> deleteTeam(int teamId) async {
+    await supabase
+        .from('registrations')
+        .update({'status': 'inactive'})
+        .eq('id', teamId);
+  }
 }

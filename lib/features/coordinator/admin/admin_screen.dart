@@ -7,7 +7,6 @@ import 'package:event_management_app/main.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
-
   @override
   State<AdminScreen> createState() => _AdminScreenState();
 }
@@ -18,6 +17,7 @@ class _AdminScreenState extends State<AdminScreen> {
   List<Map<String, dynamic>> _allCoordinators = [];
   final Set<int> _selectedTeamIds = {};
   bool _isLoading = true;
+  _AdminDataSource? _dataSource;
 
   @override
   void initState() {
@@ -25,21 +25,20 @@ class _AdminScreenState extends State<AdminScreen> {
     _fetchData();
   }
 
-  // Replace your existing _fetchData method with this one.
   Future<void> _fetchData() async {
     if (mounted) setState(() => _isLoading = true);
     try {
-      // This modern syntax fetches both futures and gives us strongly-typed results.
-      final (teamsData, coordinatorsData) = await (
-        supabase.from('registrations').select().order('team_code'),
-        _dbService.getAllCoordinators(),
-      ).wait;
-
+      final teamsFuture = supabase
+          .from('registrations')
+          .select()
+          .order('team_code', ascending: true);
+      final coordinatorsFuture = _dbService.getAllCoordinators();
+      final results = await Future.wait([teamsFuture, coordinatorsFuture]);
       if (mounted) {
         setState(() {
-          // No more casting needed, the types are already correct!
-          _allTeams = teamsData;
-          _allCoordinators = coordinatorsData;
+          _allTeams = results[0] as List<Map<String, dynamic>>;
+          _allCoordinators = results[1] as List<Map<String, dynamic>>;
+          _dataSource = _createDataSource();
           _isLoading = false;
         });
       }
@@ -55,17 +54,25 @@ class _AdminScreenState extends State<AdminScreen> {
     }
   }
 
-  String _getCoordinatorName(String? coordinatorId) {
-    if (coordinatorId == null) return 'Unassigned';
-    return _allCoordinators.firstWhere(
-      (c) => c['id'] == coordinatorId,
-      orElse: () => {'full_name': 'Unknown'},
-    )['full_name'];
+  _AdminDataSource _createDataSource() {
+    return _AdminDataSource(
+      teams: _allTeams,
+      coordinators: _allCoordinators,
+      selectedTeamIds: _selectedTeamIds,
+      onSelectChanged: (teamId, isSelected) {
+        setState(() {
+          if (isSelected == true) {
+            _selectedTeamIds.add(teamId);
+          } else {
+            _selectedTeamIds.remove(teamId);
+          }
+        });
+      },
+    );
   }
 
   Future<void> _showAssignmentDialog() async {
     String? selectedCoordinatorId;
-
     final bool? didAssign = await showDialog<bool>(
       context: context,
       builder: (context) {
@@ -76,14 +83,14 @@ class _AdminScreenState extends State<AdminScreen> {
             items: [
               const DropdownMenuItem<String>(
                 value: null,
-                child: Text('Unassign'),
+                child: Text('-- Unassign --'),
               ),
-              ..._allCoordinators.map((c) {
-                return DropdownMenuItem<String>(
+              ..._allCoordinators.map(
+                (c) => DropdownMenuItem<String>(
                   value: c['id'],
                   child: Text(c['full_name']),
-                );
-              }),
+                ),
+              ),
             ],
             onChanged: (value) => selectedCoordinatorId = value,
           ),
@@ -122,78 +129,107 @@ class _AdminScreenState extends State<AdminScreen> {
         'Teams updated successfully!',
         type: FeedbackType.success,
       );
-      _selectedTeamIds.clear(); // Clear selection after assignment
-      _fetchData(); // Refresh data
+      setState(() => _selectedTeamIds.clear());
+      _fetchData();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    if (!_isLoading) {
+      _dataSource = _createDataSource();
+    }
+    return ListView(
       padding: const EdgeInsets.all(24.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                'Admin Panel',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+      children: [
+        Row(
+          children: [
+            Text(
+              'Admin Panel',
+              style: Theme.of(
+                context,
+              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const Spacer(),
+            ElevatedButton.icon(
+              onPressed: _selectedTeamIds.isEmpty
+                  ? null
+                  : _showAssignmentDialog,
+              icon: const Icon(Icons.assignment_ind_outlined),
+              label: Text('Assign (${_selectedTeamIds.length})'),
+            ),
+            const SizedBox(width: 16),
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Refresh Data',
+              onPressed: _fetchData,
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : PaginatedDataTable(
+                header: Text('All Teams (${_allTeams.length})'),
+                rowsPerPage: 20,
+                showCheckboxColumn: true,
+                columns: const [
+                  DataColumn(label: Text('Team Code')),
+                  DataColumn(label: Text('Team Name')),
+                  DataColumn(label: Text('Assigned Coordinator')),
+                ],
+                source: _dataSource!,
               ),
-              const Spacer(),
-              ElevatedButton.icon(
-                onPressed: _selectedTeamIds.isEmpty
-                    ? null
-                    : _showAssignmentDialog,
-                icon: const Icon(Icons.assignment_ind_outlined),
-                label: const Text('Assign Selected'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : SingleChildScrollView(
-                    child: DataTable(
-                      columns: const [
-                        DataColumn(label: Text('Team Code')),
-                        DataColumn(label: Text('Team Name')),
-                        DataColumn(label: Text('Assigned Coordinator')),
-                      ],
-                      rows: _allTeams.map((team) {
-                        final teamId = team['id'] as int;
-                        return DataRow(
-                          selected: _selectedTeamIds.contains(teamId),
-                          onSelectChanged: (isSelected) {
-                            setState(() {
-                              if (isSelected == true) {
-                                _selectedTeamIds.add(teamId);
-                              } else {
-                                _selectedTeamIds.remove(teamId);
-                              }
-                            });
-                          },
-                          cells: [
-                            DataCell(Text(team['team_code'] ?? '')),
-                            DataCell(Text(team['team_name'] ?? '')),
-                            DataCell(
-                              Text(
-                                _getCoordinatorName(
-                                  team['assigned_coordinator_id'],
-                                ),
-                              ),
-                            ),
-                          ],
-                        );
-                      }).toList(),
-                    ),
-                  ),
-          ),
-        ],
-      ),
+      ],
     );
   }
+}
+
+// Data source for the admin paginated table
+class _AdminDataSource extends DataTableSource {
+  final List<Map<String, dynamic>> teams;
+  final List<Map<String, dynamic>> coordinators;
+  final Set<int> selectedTeamIds;
+  final Function(int, bool?) onSelectChanged;
+
+  _AdminDataSource({
+    required this.teams,
+    required this.coordinators,
+    required this.selectedTeamIds,
+    required this.onSelectChanged,
+  });
+
+  String _getCoordinatorName(String? coordinatorId) {
+    if (coordinatorId == null) return 'Unassigned';
+    return coordinators.firstWhere(
+      (c) => c['id'] == coordinatorId,
+      orElse: () => {'full_name': 'Unknown'},
+    )['full_name'];
+  }
+
+  @override
+  DataRow? getRow(int index) {
+    if (index >= teams.length) return null;
+    final team = teams[index];
+    final teamId = team['id'] as int;
+
+    return DataRow(
+      selected: selectedTeamIds.contains(teamId),
+      onSelectChanged: (isSelected) => onSelectChanged(teamId, isSelected),
+      cells: [
+        DataCell(Text(team['team_code'] ?? '')),
+        DataCell(Text(team['team_name'] ?? '')),
+        DataCell(Text(_getCoordinatorName(team['assigned_coordinator_id']))),
+      ],
+    );
+  }
+
+  @override
+  bool get isRowCountApproximate => false;
+
+  @override
+  int get rowCount => teams.length;
+
+  @override
+  int get selectedRowCount => selectedTeamIds.length;
 }
