@@ -2,6 +2,7 @@
 
 import 'package:event_management_app/core/services/database_service.dart';
 import 'package:event_management_app/features/coordinator/admin/admin_screen.dart';
+import 'package:event_management_app/features/coordinator/attendance/attendance_dashboard_screen.dart';
 import 'package:event_management_app/features/coordinator/dashboard/dashboard_screen.dart';
 import 'package:event_management_app/features/coordinator/teams/teams_screen.dart';
 import 'package:event_management_app/main.dart';
@@ -39,6 +40,8 @@ class _MainLayoutState extends State<MainLayout> {
     final List<Widget> screens = [
       const DashboardScreen(),
       const TeamsScreen(),
+      const AttendanceDashboardScreen(), // New Screen
+
       if (_userRole == 'admin') const AdminScreen(),
     ];
 
@@ -53,6 +56,12 @@ class _MainLayoutState extends State<MainLayout> {
         selectedIcon: Icon(Icons.list_alt),
         label: Text('Teams'),
       ),
+      const NavigationRailDestination(
+        icon: Icon(Icons.person_search_outlined),
+        selectedIcon: Icon(Icons.person_search),
+        label: Text('Attendance'),
+      ), // New Nav Item
+
       if (_userRole == 'admin')
         const NavigationRailDestination(
           icon: Icon(Icons.admin_panel_settings_outlined),
@@ -74,6 +83,13 @@ class _MainLayoutState extends State<MainLayout> {
         selected: _selectedIndex == 1,
         onTap: () => _onSelectItem(1),
       ),
+      ListTile(
+        leading: const Icon(Icons.person_search),
+        title: const Text('Attendance'),
+        selected: _selectedIndex == 2,
+        onTap: () => _onSelectItem(2),
+      ), // New Drawer Item
+
       if (_userRole == 'admin')
         ListTile(
           leading: const Icon(Icons.admin_panel_settings),

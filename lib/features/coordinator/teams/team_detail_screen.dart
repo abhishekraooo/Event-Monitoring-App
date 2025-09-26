@@ -40,13 +40,12 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
-        // REFACTORED to use the new utility
         showFeedbackSnackbar(
           context,
           'Error loading data: $e',
           type: FeedbackType.error,
         );
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -60,83 +59,83 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
         .join('\n');
   }
 
-  // NEW: Method to show the editing dialog
   Future<void> _showEditDialog(
+    Map<String, dynamic> participantData,
     String title,
-    Map<String, dynamic> sectionData,
   ) async {
     final formKey = GlobalKey<FormState>();
-    final controllers = {
-      for (var entry in sectionData.entries)
-        entry.key: TextEditingController(text: entry.value?.toString() ?? ''),
+    final Map<String, TextEditingController> controllers = {
+      'name': TextEditingController(text: participantData['name']),
+      'email': TextEditingController(text: participantData['email']),
+      'number': TextEditingController(text: participantData['number']),
+      'college': TextEditingController(text: participantData['college']),
+      'branch': TextEditingController(text: participantData['branch']),
+      'semester': TextEditingController(text: participantData['semester']),
     };
 
     final bool? didSaveChanges = await showDialog<bool>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('Edit $title'),
-          content: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: sectionData.keys.map((key) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                    child: TextFormField(
-                      controller: controllers[key],
-                      decoration: InputDecoration(labelText: key),
-                      maxLines: key.toLowerCase().contains('abstract') ? 5 : 1,
+      builder: (context) => AlertDialog(
+        title: Text('Edit $title'),
+        content: Form(
+          key: formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: controllers.entries.map((entry) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: TextFormField(
+                    controller: entry.value,
+                    decoration: InputDecoration(
+                      labelText: entry.key.replaceFirst(
+                        entry.key[0],
+                        entry.key[0].toUpperCase(),
+                      ),
                     ),
-                  );
-                }).toList(),
-              ),
+                  ),
+                );
+              }).toList(),
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                if (formKey.currentState?.validate() ?? false) {
-                  final dataToUpdate = <String, dynamic>{};
-                  controllers.forEach((key, controller) {
-                    // This finds the original DB column name, e.g., 'Name' -> 'team_lead_name'
-                    final originalKey = _teamData!.keys.firstWhere(
-                      (k) => k.endsWith(key.toLowerCase().replaceAll(' ', '_')),
-                      orElse: () => '',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (formKey.currentState?.validate() ?? false) {
+                final dataToUpdate = <String, dynamic>{};
+                controllers.forEach((key, controller) {
+                  dataToUpdate[key] = controller.text.trim();
+                });
+                try {
+                  await _dbService.updateParticipant(
+                    participantData['id'],
+                    dataToUpdate,
+                  );
+                  if (mounted) Navigator.of(context).pop(true);
+                } catch (e) {
+                  if (mounted)
+                    showFeedbackSnackbar(
+                      context,
+                      'Error: $e',
+                      type: FeedbackType.error,
                     );
-                    if (originalKey.isNotEmpty) {
-                      dataToUpdate[originalKey] = controller.text.trim();
-                    }
-                  });
-
-                  try {
-                    await _dbService.updateRegistration(
-                      _teamData!['id'],
-                      dataToUpdate,
-                    );
-                    if (mounted) Navigator.of(context).pop(true);
-                  } catch (e) {
-                    if (mounted)
-                      showFeedbackSnackbar(
-                        context,
-                        'Error: ${e.toString()}',
-                        type: FeedbackType.error,
-                      );
-                  }
                 }
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
     );
-
+    // Dispose controllers after dialog is closed
+    for (var controller in controllers.values) {
+      controller.dispose();
+    }
     if (didSaveChanges == true) {
       showFeedbackSnackbar(
         context,
@@ -162,43 +161,11 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
       );
     }
 
-    // Data maps for each section
-    final ideaDetails = {
-      'Title': _teamData!['idea_title'],
-      'Abstract': _teamData!['idea_abstract'],
-    };
-    final leadDetails = {
-      'Name': _teamData!['team_lead_name'],
-      'Email': _teamData!['team_lead_email'],
-      'Number': _teamData!['team_lead_number'],
-      'College': _teamData!['team_lead_college'],
-      'Branch': _teamData!['team_lead_branch'],
-      'Semester': _teamData!['team_lead_semester'],
-    };
-    final member1Details = {
-      'Name': _teamData!['member_1_name'],
-      'Email': _teamData!['member_1_email'],
-      'Number': _teamData!['member_1_number'],
-      'College': _teamData!['member_1_college'],
-      'Branch': _teamData!['member_1_branch'],
-      'Semester': _teamData!['member_1_semester'],
-    };
-    final member2Details = {
-      'Name': _teamData!['member_2_name'],
-      'Email': _teamData!['member_2_email'],
-      'Number': _teamData!['member_2_number'],
-      'College': _teamData!['member_2_college'],
-      'Branch': _teamData!['member_2_branch'],
-      'Semester': _teamData!['member_2_semester'],
-    };
-    final member3Details = {
-      'Name': _teamData!['member_3_name'],
-      'Email': _teamData!['member_3_email'],
-      'Number': _teamData!['member_3_number'],
-      'College': _teamData!['member_3_college'],
-      'Branch': _teamData!['member_3_branch'],
-      'Semester': _teamData!['member_3_semester'],
-    };
+    final participants = (_teamData!['participants'] as List<dynamic>)
+        .cast<Map<String, dynamic>>();
+    participants.sort(
+      (a, b) => (a['is_team_lead'] == true) ? -1 : 1,
+    ); // Ensure lead is always first
 
     return Scaffold(
       appBar: AppBar(title: Text(_teamData!['team_code'] ?? 'Team Details')),
@@ -216,31 +183,36 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
                 ),
               ),
             ),
-
-            _buildSectionCard('Idea', ideaDetails),
-            _buildSectionCard('Team Lead', leadDetails),
-
-            if (_teamData!['member_1_name'] != null &&
-                _teamData!['member_1_name'].isNotEmpty)
-              _buildSectionCard('Member 1', member1Details),
-
-            if (_teamData!['member_2_name'] != null &&
-                _teamData!['member_2_name'].isNotEmpty)
-              _buildSectionCard('Member 2', member2Details),
-
-            if (_teamData!['member_3_name'] != null &&
-                _teamData!['member_3_name'].isNotEmpty)
-              _buildSectionCard('Member 3', member3Details),
+            _buildSectionCard('Idea', {
+              'Title': _teamData!['idea_title'],
+              'Abstract': _teamData!['idea_abstract'],
+            }, null),
+            ...participants.map((participant) {
+              final title = (participant['is_team_lead'] == true)
+                  ? 'Team Lead'
+                  : 'Member';
+              final details = {
+                'Name': participant['name'],
+                'Email': participant['email'],
+                'Number': participant['number'],
+                'College': participant['college'],
+                'Branch': participant['branch'],
+                'Semester': participant['semester'],
+              };
+              return _buildSectionCard(title, details, participant);
+            }).toList(),
           ],
         ),
       ),
     );
   }
 
-  // Updated _buildSectionCard to include a conditional edit button
-  Widget _buildSectionCard(String title, Map<String, dynamic> details) {
+  Widget _buildSectionCard(
+    String title,
+    Map<String, dynamic> details,
+    Map<String, dynamic>? participantData,
+  ) {
     final copyableText = _formatDetailsForCopy(details);
-
     return Card(
       margin: const EdgeInsets.only(bottom: 16.0),
       child: Padding(
@@ -263,13 +235,10 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
                       tooltip: 'Copy Details',
                       onPressed: () {
                         Clipboard.setData(ClipboardData(text: copyableText));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Copied to clipboard!')),
-                        );
+                        showFeedbackSnackbar(context, 'Copied to clipboard!');
                       },
                     ),
-                    // NEW: Conditional Edit Button
-                    if (_userRole == 'admin')
+                    if (_userRole == 'admin' && participantData != null)
                       IconButton(
                         icon: const Icon(
                           Icons.edit_outlined,
@@ -277,7 +246,8 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
                           color: Colors.grey,
                         ),
                         tooltip: 'Edit Details',
-                        onPressed: () => _showEditDialog(title, details),
+                        onPressed: () =>
+                            _showEditDialog(participantData, title),
                       ),
                   ],
                 ),
@@ -285,7 +255,7 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
             ),
             const Divider(height: 16),
             ...details.entries.map(
-              (entry) => _buildDetailRow(entry.key, entry.value.toString()),
+              (entry) => _buildDetailRow(entry.key, entry.value?.toString()),
             ),
           ],
         ),

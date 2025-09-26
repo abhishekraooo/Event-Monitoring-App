@@ -36,13 +36,8 @@ class _TeamsScreenState extends State<TeamsScreen> {
     if (mounted) setState(() => _isLoading = true);
     try {
       final role = await _dbService.getCurrentUserRole();
-      final data = await supabase
-          .from('registrations')
-          .select()
-          .eq('status', 'active')
-          .order('team_code', ascending: true)
-          .limit(10000);
-
+      // This is the correct method to call for this screen's data
+      final data = await _dbService.getTeamsWithLeads();
       if (mounted) {
         setState(() {
           _userRole = role;
@@ -53,11 +48,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        showFeedbackSnackbar(
-          context,
-          'Error fetching data: $e',
-          type: FeedbackType.error,
-        );
+        showFeedbackSnackbar(context, 'Error: $e', type: FeedbackType.error);
         setState(() => _isLoading = false);
       }
     }
@@ -79,15 +70,16 @@ class _TeamsScreenState extends State<TeamsScreen> {
     final query = _searchController.text.toLowerCase();
     setState(() {
       _filteredRegistrations = _allRegistrations.where((team) {
+        final leadName = (team['participants'] as List).isNotEmpty
+            ? (team['participants'][0]['name'] as String? ?? '')
+            : '';
         return (team['team_name'] as String? ?? '').toLowerCase().contains(
               query,
             ) ||
             (team['team_code'] as String? ?? '').toLowerCase().contains(
               query,
             ) ||
-            (team['team_lead_name'] as String? ?? '').toLowerCase().contains(
-              query,
-            );
+            leadName.toLowerCase().contains(query);
       }).toList();
       _dataSource = _createDataSource();
     });
@@ -96,7 +88,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
   _TeamDataSource _createDataSource() {
     return _TeamDataSource(
       data: _filteredRegistrations,
-      context: context,
       userRole: _userRole,
       onTapRow: (teamId) {
         Navigator.push(
@@ -229,11 +220,10 @@ class _TeamsScreenState extends State<TeamsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_isLoading && _dataSource == null) {
+    if (!_isLoading) {
       _dataSource = _createDataSource();
     }
 
-    // FIX: Replaced Column with a ListView for vertical scrolling.
     return ListView(
       padding: const EdgeInsets.all(24.0),
       children: [
@@ -277,11 +267,12 @@ class _TeamsScreenState extends State<TeamsScreen> {
           ],
         ),
         const SizedBox(height: 16),
-        // FIX: PaginatedDataTable is now a direct child of the scrollable ListView.
-        // The Expanded widget is no longer needed.
         _isLoading
             ? const Center(
-                child: CircularProgressIndicator(color: Colors.black),
+                child: Padding(
+                  padding: EdgeInsets.all(32.0),
+                  child: CircularProgressIndicator(color: Colors.black),
+                ),
               )
             : PaginatedDataTable(
                 header: Text(
@@ -308,14 +299,12 @@ class _TeamsScreenState extends State<TeamsScreen> {
 
 class _TeamDataSource extends DataTableSource {
   final List<Map<String, dynamic>> data;
-  final BuildContext context;
   final String userRole;
   final Function(int teamId) onTapRow;
   final Function(Map<String, dynamic> team) onDelete;
 
   _TeamDataSource({
     required this.data,
-    required this.context,
     required this.userRole,
     required this.onTapRow,
     required this.onDelete,
@@ -324,8 +313,10 @@ class _TeamDataSource extends DataTableSource {
   @override
   DataRow? getRow(int index) {
     if (index >= data.length) return null;
-
     final team = data[index];
+    final leadData = (team['participants'] as List).isNotEmpty
+        ? team['participants'][0] as Map<String, dynamic>
+        : {'name': 'N/A', 'college': 'N/A'};
     final hasAbstract =
         team['idea_abstract'] != null &&
         (team['idea_abstract'] as String).isNotEmpty;
@@ -337,8 +328,8 @@ class _TeamDataSource extends DataTableSource {
       cells: [
         DataCell(Text(team['team_code'] ?? '')),
         DataCell(Text(team['team_name'] ?? '')),
-        DataCell(Text(team['team_lead_name'] ?? '')),
-        DataCell(Text(team['team_lead_college'] ?? '')),
+        DataCell(Text(leadData['name'] ?? '')),
+        DataCell(Text(leadData['college'] ?? '')),
         DataCell(
           Icon(
             team['is_checked_in'] == true ? Icons.check_circle : Icons.cancel,
@@ -365,10 +356,16 @@ class _TeamDataSource extends DataTableSource {
 
   @override
   bool get isRowCountApproximate => false;
-
   @override
   int get rowCount => data.length;
-
   @override
   int get selectedRowCount => 0;
+}
+
+/// Soft deletes a team by setting its status to 'inactive'.
+Future<void> deleteTeam(int teamId) async {
+  await supabase
+      .from('registrations')
+      .update({'status': 'inactive'})
+      .eq('id', teamId);
 }

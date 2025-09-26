@@ -1,6 +1,7 @@
 // lib/features/coordinator/scanner/qr_scanner_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Required for haptic feedback
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 class QRScannerScreen extends StatefulWidget {
@@ -13,6 +14,8 @@ class QRScannerScreen extends StatefulWidget {
 class _QRScannerScreenState extends State<QRScannerScreen> {
   final MobileScannerController controller = MobileScannerController();
   bool _isProcessing = false;
+  bool _codeDetected =
+      false; // NEW: State to track if code is detected for UI feedback
 
   @override
   Widget build(BuildContext context) {
@@ -26,26 +29,42 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
         children: [
           MobileScanner(
             controller: controller,
-            onDetect: (BarcodeCapture capture) {
+            onDetect: (BarcodeCapture capture) async {
               if (!_isProcessing) {
                 _isProcessing = true;
                 final String? code = capture.barcodes.first.rawValue;
+
                 if (code != null) {
+                  // --- NEW: Provide immediate feedback ---
+                  HapticFeedback.heavyImpact(); // Vibrate the device
+                  setState(() {
+                    _codeDetected = true; // Change border color to green
+                  });
+
+                  // Wait a moment so the user can see the green border
+                  await Future.delayed(const Duration(milliseconds: 500));
+
                   // Pop the screen and return the scanned code
-                  Navigator.of(context).pop(code);
+                  if (mounted) {
+                    Navigator.of(context).pop(code);
+                  }
                 } else {
-                  // If code is null, allow another scan
                   _isProcessing = false;
                 }
               }
             },
           ),
-          // Simple overlay
+          // UPDATED: The overlay now changes color on detection
           Container(
             width: 250,
             height: 250,
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.white, width: 4),
+              border: Border.all(
+                color: _codeDetected
+                    ? Colors.green
+                    : Colors.white, // Conditional color
+                width: 4,
+              ),
               borderRadius: BorderRadius.circular(12),
             ),
           ),

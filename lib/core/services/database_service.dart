@@ -3,7 +3,7 @@
 import 'package:event_management_app/main.dart';
 
 class DatabaseService {
-  /// Fetches the role ('admin' or 'coordinator') for the current user.
+  /// Fetches the role ('admin', 'core_coordinator', or 'coordinator') for the current user.
   Future<String> getCurrentUserRole() async {
     try {
       final userId = supabase.auth.currentUser!.id;
@@ -14,18 +14,26 @@ class DatabaseService {
           .single();
       return response['role'] ?? 'coordinator';
     } catch (e) {
-      // Default to the least privileged role on error
       return 'coordinator';
     }
   }
 
-  /// Fetches all data for a single team by its primary key ID.
+  /// Fetches a single team and ALL its participants.
   Future<Map<String, dynamic>> getTeamById(int teamId) async {
     return await supabase
         .from('registrations')
-        .select()
+        .select('*, participants(*)')
         .eq('id', teamId)
         .single();
+  }
+
+  Future<List<Map<String, dynamic>>> getTeamsWithLeads() async {
+    return await supabase
+        .from('registrations')
+        .select('*, participants!inner(*)')
+        .eq('participants.is_team_lead', true)
+        .eq('status', 'active')
+        .order('team_code', ascending: true); // Make sure this line is here
   }
 
   /// Updates a registration record in the database.
@@ -42,7 +50,6 @@ class DatabaseService {
   }
 
   /// Assigns a coordinator to a list of teams in a single operation.
-  /// Pass null for coordinatorId to unassign.
   Future<void> bulkAssignCoordinator(
     List<int> teamIds,
     String? coordinatorId,
@@ -59,5 +66,46 @@ class DatabaseService {
         .from('registrations')
         .update({'status': 'inactive'})
         .eq('id', teamId);
+  }
+
+  // MOVED: This method is now correctly inside the class.
+  /// Updates a single participant's record in the 'participants' table.
+  Future<void> updateParticipant(
+    int participantId,
+    Map<String, dynamic> dataToUpdate,
+  ) async {
+    await supabase
+        .from('participants')
+        .update(dataToUpdate)
+        .eq('id', participantId);
+  }
+
+  Future<List<Map<String, dynamic>>> getParticipantStats() async {
+    return await supabase
+        .from('participants')
+        .select('*, registrations(*)')
+        .order('id');
+  }
+
+  /// Finds a team's basic info using its unique team_code.
+  Future<Map<String, dynamic>?> getTeamByCode(String teamCode) async {
+    try {
+      return await supabase
+          .from('registrations')
+          .select('id, team_name')
+          .eq('team_code', teamCode)
+          .single();
+    } catch (e) {
+      return null; // Return null if not found
+    }
+  }
+
+  /// Fetches all participants for a single team.
+  Future<List<Map<String, dynamic>>> getParticipantsForTeam(int teamId) async {
+    return await supabase
+        .from('participants')
+        .select()
+        .eq('team_id', teamId)
+        .order('is_team_lead', ascending: false); // Show lead first
   }
 }
