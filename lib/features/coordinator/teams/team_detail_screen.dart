@@ -59,7 +59,7 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
         .join('\n');
   }
 
-  Future<void> _showEditDialog(
+  Future<void> _showEditParticipantDialog(
     Map<String, dynamic> participantData,
     String title,
   ) async {
@@ -132,14 +132,95 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
         ],
       ),
     );
-    // Dispose controllers after dialog is closed
+
     for (var controller in controllers.values) {
       controller.dispose();
     }
+
     if (didSaveChanges == true) {
       showFeedbackSnackbar(
         context,
         '$title details updated successfully!',
+        type: FeedbackType.success,
+      );
+      _loadData();
+    }
+  }
+
+  Future<void> _showEditIdeaDialog() async {
+    final formKey = GlobalKey<FormState>();
+    final titleController = TextEditingController(
+      text: _teamData!['idea_title'],
+    );
+    final abstractController = TextEditingController(
+      text: _teamData!['idea_abstract'],
+    );
+
+    final bool? didSaveChanges = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Idea Details'),
+        content: Form(
+          key: formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: titleController,
+                  decoration: const InputDecoration(labelText: 'Idea Title'),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: abstractController,
+                  decoration: const InputDecoration(labelText: 'Idea Abstract'),
+                  maxLines: 5,
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (formKey.currentState?.validate() ?? false) {
+                final dataToUpdate = {
+                  'idea_title': titleController.text.trim(),
+                  'idea_abstract': abstractController.text.trim(),
+                };
+                try {
+                  await _dbService.updateRegistration(
+                    _teamData!['id'],
+                    dataToUpdate,
+                  );
+                  if (mounted) Navigator.of(context).pop(true);
+                } catch (e) {
+                  if (mounted)
+                    showFeedbackSnackbar(
+                      context,
+                      'Error: $e',
+                      type: FeedbackType.error,
+                    );
+                }
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    titleController.dispose();
+    abstractController.dispose();
+
+    if (didSaveChanges == true) {
+      showFeedbackSnackbar(
+        context,
+        'Idea details updated successfully!',
         type: FeedbackType.success,
       );
       _loadData();
@@ -163,9 +244,7 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
 
     final participants = (_teamData!['participants'] as List<dynamic>)
         .cast<Map<String, dynamic>>();
-    participants.sort(
-      (a, b) => (a['is_team_lead'] == true) ? -1 : 1,
-    ); // Ensure lead is always first
+    participants.sort((a, b) => (a['is_team_lead'] == true) ? -1 : 1);
 
     return Scaffold(
       appBar: AppBar(title: Text(_teamData!['team_code'] ?? 'Team Details')),
@@ -186,7 +265,7 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
             _buildSectionCard('Idea', {
               'Title': _teamData!['idea_title'],
               'Abstract': _teamData!['idea_abstract'],
-            }, null),
+            }, _teamData),
             ...participants.map((participant) {
               final title = (participant['is_team_lead'] == true)
                   ? 'Team Lead'
@@ -210,7 +289,7 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
   Widget _buildSectionCard(
     String title,
     Map<String, dynamic> details,
-    Map<String, dynamic>? participantData,
+    Map<String, dynamic>? dataForEditing,
   ) {
     final copyableText = _formatDetailsForCopy(details);
     return Card(
@@ -238,7 +317,7 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
                         showFeedbackSnackbar(context, 'Copied to clipboard!');
                       },
                     ),
-                    if (_userRole == 'admin' && participantData != null)
+                    if (_userRole == 'admin' && dataForEditing != null)
                       IconButton(
                         icon: const Icon(
                           Icons.edit_outlined,
@@ -246,8 +325,13 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
                           color: Colors.grey,
                         ),
                         tooltip: 'Edit Details',
-                        onPressed: () =>
-                            _showEditDialog(participantData, title),
+                        onPressed: () {
+                          if (title == 'Idea') {
+                            _showEditIdeaDialog();
+                          } else {
+                            _showEditParticipantDialog(dataForEditing, title);
+                          }
+                        },
                       ),
                   ],
                 ),
