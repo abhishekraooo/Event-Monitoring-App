@@ -2,9 +2,11 @@
 
 import 'dart:async';
 import 'package:event_management_app/core/services/database_service.dart';
+import 'package:event_management_app/core/services/export_service.dart';
 import 'package:event_management_app/core/utils/snackbar_utils.dart';
 import 'package:event_management_app/features/coordinator/teams/add_team_screen.dart';
 import 'package:event_management_app/features/coordinator/teams/team_detail_screen.dart';
+import 'package:event_management_app/main.dart';
 import 'package:flutter/material.dart';
 
 class TeamsScreen extends StatefulWidget {
@@ -26,11 +28,90 @@ class _TeamsScreenState extends State<TeamsScreen> {
 
   int _firstRowIndex = 0;
 
+  bool _isLoadingExport = false; // NEW: State for export loading
+  final ExportService _exportService =
+      ExportService(); // NEW: Export service instance
+
   @override
   void initState() {
     super.initState();
     _fetchRegistrations();
     _searchController.addListener(_filterRegistrations);
+  }
+
+  // NEW: Method to handle the export process
+  Future<void> _exportData() async {
+    setState(() => _isLoadingExport = true);
+
+    try {
+      // Fetch fresh, complete data for the export
+      final allTeamsWithAllParticipants = await supabase
+          .from('registrations')
+          .select('*, participants(*)')
+          .eq('status', 'active')
+          .order('team_code', ascending: true);
+
+      final List<String> headers = [
+        'team_code',
+        'team_name',
+        'lead_name',
+        'lead_email',
+        'lead_number',
+        'member_1_name',
+        'member_1_email',
+        'member_1_number',
+        'member_2_name',
+        'member_2_email',
+        'member_2_number',
+        'member_3_name',
+        'member_3_email',
+        'member_3_number',
+      ];
+
+      List<List<dynamic>> rows = [];
+      rows.add(headers);
+
+      for (final team in allTeamsWithAllParticipants) {
+        final participants = (team['participants'] as List)
+            .cast<Map<String, dynamic>>();
+
+        final lead = participants.firstWhere(
+          (p) => p['is_team_lead'] == true,
+          orElse: () => {},
+        );
+        final members = participants
+            .where((p) => p['is_team_lead'] == false)
+            .toList();
+
+        List<dynamic> row = [
+          team['team_code'],
+          team['team_name'],
+          team['idea_title'],
+          team['idea_abstract'],
+          lead['name'],
+          lead['email'],
+          lead['number'],
+          members.isNotEmpty ? members[0]['name'] : '',
+          members.length > 1 ? members[1]['name'] : '',
+          members.length > 2 ? members[2]['name'] : '',
+        ];
+        rows.add(row);
+      }
+
+      _exportService.exportToCsv(rows, 'ideathon_registrations.csv');
+    } catch (e) {
+      if (mounted) {
+        showFeedbackSnackbar(
+          context,
+          'Failed to export data: $e',
+          type: FeedbackType.error,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingExport = false);
+      }
+    }
   }
 
   Future<void> _fetchRegistrations() async {
@@ -173,6 +254,19 @@ class _TeamsScreenState extends State<TeamsScreen> {
               ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const Spacer(),
+            // NEW: Export Button
+            IconButton(
+              onPressed: _isLoadingExport ? null : _exportData,
+              icon: _isLoadingExport
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.download_for_offline_outlined),
+              iconSize: 32,
+              tooltip: 'Export to CSV',
+            ),
             // UPDATED: Replaced scanner icon with Add Team icon
             IconButton(
               onPressed: () {
