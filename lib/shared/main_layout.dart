@@ -1,12 +1,14 @@
 // lib/features/coordinator/shared/main_layout.dart
 
-import 'package:event_management_app/core/services/database_service.dart';
+import 'package:event_management_app/core/utils/snackbar_utils.dart';
+import 'package:flutter/material.dart';
 import 'package:event_management_app/features/coordinator/admin/admin_screen.dart';
 import 'package:event_management_app/features/coordinator/attendance/attendance_dashboard_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:event_management_app/features/coordinator/dashboard/dashboard_screen.dart';
 import 'package:event_management_app/features/coordinator/teams/teams_screen.dart';
+import 'package:event_management_app/core/services/database_service.dart';
 import 'package:event_management_app/main.dart';
-import 'package:flutter/material.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -16,7 +18,7 @@ class MainLayout extends StatefulWidget {
 
 class _MainLayoutState extends State<MainLayout> {
   int _selectedIndex = 0;
-  String? _userRole; // To store the user's role
+  String? _userRole;
   final DatabaseService _dbService = DatabaseService();
 
   @override
@@ -34,14 +36,53 @@ class _MainLayoutState extends State<MainLayout> {
     }
   }
 
+  Future<void> _showSignOutConfirmation() async {
+    final bool? confirm = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Sign Out'),
+        content: const Text('Are you sure you want to sign out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Sign Out'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      await supabase.auth.signOut();
+    }
+  }
+
+  void _onSelectItem(int index) {
+    // This logic prevents out-of-bounds errors if the admin tab isn't visible
+    final adminIndex = 3;
+    final maxIndex = _userRole == 'admin' ? 3 : 2;
+    if (index > maxIndex) return;
+
+    setState(() => _selectedIndex = index);
+    Navigator.pop(context); // Close drawer
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Dynamically build the screens and nav destinations based on role
+    if (_userRole == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     final List<Widget> screens = [
       const DashboardScreen(),
       const TeamsScreen(),
-      const AttendanceDashboardScreen(), // New Screen
-
+      const AttendanceDashboardScreen(),
       if (_userRole == 'admin') const AdminScreen(),
     ];
 
@@ -60,8 +101,7 @@ class _MainLayoutState extends State<MainLayout> {
         icon: Icon(Icons.person_search_outlined),
         selectedIcon: Icon(Icons.person_search),
         label: Text('Attendance'),
-      ), // New Nav Item
-
+      ),
       if (_userRole == 'admin')
         const NavigationRailDestination(
           icon: Icon(Icons.admin_panel_settings_outlined),
@@ -88,52 +128,58 @@ class _MainLayoutState extends State<MainLayout> {
         title: const Text('Attendance'),
         selected: _selectedIndex == 2,
         onTap: () => _onSelectItem(2),
-      ), // New Drawer Item
-
+      ),
       if (_userRole == 'admin')
         ListTile(
           leading: const Icon(Icons.admin_panel_settings),
           title: const Text('Admin'),
-          selected: _selectedIndex == 2,
-          onTap: () => _onSelectItem(2),
+          selected: _selectedIndex == 3,
+          onTap: () => _onSelectItem(3),
         ),
     ];
-
-    if (_userRole == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
 
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth > 640) {
+          // WIDE SCREEN LAYOUT
           return Scaffold(
-            body: Row(
+            body: Column(
               children: [
-                NavigationRail(
-                  selectedIndex: _selectedIndex,
-                  onDestinationSelected: (int index) =>
-                      setState(() => _selectedIndex = index),
-                  labelType: NavigationRailLabelType.all,
-                  destinations: navRailDestinations,
-                  trailing: Expanded(
-                    child: Align(
-                      alignment: Alignment.bottomCenter,
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 20.0),
-                        child: IconButton(
-                          icon: const Icon(Icons.logout),
-                          onPressed: () => supabase.auth.signOut(),
+                Expanded(
+                  child: Row(
+                    children: [
+                      NavigationRail(
+                        selectedIndex: _selectedIndex,
+                        onDestinationSelected: (int index) =>
+                            setState(() => _selectedIndex = index),
+                        labelType: NavigationRailLabelType.all,
+                        destinations: navRailDestinations,
+                        trailing: Expanded(
+                          child: Align(
+                            alignment: Alignment.bottomCenter,
+                            child: Padding(
+                              padding: const EdgeInsets.only(bottom: 20.0),
+                              child: IconButton(
+                                icon: const Icon(Icons.logout),
+                                tooltip: 'Sign Out',
+                                onPressed: _showSignOutConfirmation,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                      const VerticalDivider(thickness: 1, width: 1),
+                      Expanded(child: screens[_selectedIndex]),
+                    ],
                   ),
                 ),
-                const VerticalDivider(thickness: 1, width: 1),
-                Expanded(child: screens[_selectedIndex]),
+                const Divider(height: 1),
+                const _CreditsFooter(),
               ],
             ),
           );
         } else {
+          // NARROW SCREEN LAYOUT
           return Scaffold(
             appBar: AppBar(title: const Text('Ideathon Monitor')),
             drawer: Drawer(
@@ -154,21 +200,59 @@ class _MainLayoutState extends State<MainLayout> {
                     title: const Text('Sign Out'),
                     onTap: () {
                       Navigator.pop(context);
-                      supabase.auth.signOut();
+                      _showSignOutConfirmation();
                     },
                   ),
                 ],
               ),
             ),
             body: screens[_selectedIndex],
+            bottomNavigationBar: const _CreditsFooter(),
           );
         }
       },
     );
   }
+}
 
-  void _onSelectItem(int index) {
-    setState(() => _selectedIndex = index);
-    Navigator.pop(context); // Close drawer
+class _CreditsFooter extends StatelessWidget {
+  const _CreditsFooter();
+
+  Future<void> _launchPhone(BuildContext context) async {
+    final Uri phoneNumber = Uri.parse('tel:+919606248727');
+    if (await canLaunchUrl(phoneNumber)) {
+      await launchUrl(phoneNumber);
+    } else {
+      showFeedbackSnackbar(
+        context,
+        'Could not open phone dialer.',
+        type: FeedbackType.error,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => _launchPhone(context),
+      child: Container(
+        color: Theme.of(context).cardTheme.color,
+        padding: const EdgeInsets.all(12.0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.call, size: 14, color: Colors.grey),
+            const SizedBox(width: 8),
+            Text(
+              'Managed by Team Tryanuka',
+              textAlign: TextAlign.center,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: Colors.grey.shade600),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

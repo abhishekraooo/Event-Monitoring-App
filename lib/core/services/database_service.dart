@@ -108,4 +108,15 @@ class DatabaseService {
         .eq('team_id', teamId)
         .order('is_team_lead', ascending: false); // Show lead first
   }
+
+  /// Fetches the calculated attendance status for all teams from the view.
+  Future<List<Map<String, dynamic>>> getTeamAttendanceStatus() async {
+    // We select from the 'view' as if it were a normal table.
+    return await supabase.from('team_attendance_status').select();
+  }
+
+  /// Creates a new team and its participants using a database function.
+  Future<void> createNewTeam(Map<String, dynamic> teamData) async {
+    await supabase.rpc('create_new_team', params: {'team_data': teamData});
+  }
 }

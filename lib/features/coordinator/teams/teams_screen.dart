@@ -1,12 +1,11 @@
 // lib/features/coordinator/teams/teams_screen.dart
 
 import 'dart:async';
-import 'package:event_management_app/features/coordinator/scanner/qr_scanner_screen.dart';
-import 'package:event_management_app/main.dart';
-import 'package:flutter/material.dart';
 import 'package:event_management_app/core/services/database_service.dart';
 import 'package:event_management_app/core/utils/snackbar_utils.dart';
+import 'package:event_management_app/features/coordinator/teams/add_team_screen.dart';
 import 'package:event_management_app/features/coordinator/teams/team_detail_screen.dart';
+import 'package:flutter/material.dart';
 
 class TeamsScreen extends StatefulWidget {
   const TeamsScreen({super.key});
@@ -25,6 +24,8 @@ class _TeamsScreenState extends State<TeamsScreen> {
   final _searchController = TextEditingController();
   Timer? _debounce;
 
+  int _firstRowIndex = 0;
+
   @override
   void initState() {
     super.initState();
@@ -36,7 +37,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
     if (mounted) setState(() => _isLoading = true);
     try {
       final role = await _dbService.getCurrentUserRole();
-      // This is the correct method to call for this screen's data
       final data = await _dbService.getTeamsWithLeads();
       if (mounted) {
         setState(() {
@@ -48,7 +48,11 @@ class _TeamsScreenState extends State<TeamsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        showFeedbackSnackbar(context, 'Error: $e', type: FeedbackType.error);
+        showFeedbackSnackbar(
+          context,
+          'Error fetching data: $e',
+          type: FeedbackType.error,
+        );
         setState(() => _isLoading = false);
       }
     }
@@ -89,89 +93,21 @@ class _TeamsScreenState extends State<TeamsScreen> {
     return _TeamDataSource(
       data: _filteredRegistrations,
       userRole: _userRole,
-      onTapRow: (teamId) {
-        Navigator.push(
+      // UPDATED: Navigation logic is now smarter
+      onTapRow: (teamId) async {
+        final didSaveChanges = await Navigator.push<bool>(
           context,
           MaterialPageRoute(
             builder: (context) => TeamDetailScreen(teamId: teamId),
           ),
-        ).then((_) => _fetchRegistrations());
+        );
+        // Only refresh the data if the detail screen returns 'true' after an edit
+        if (didSaveChanges == true) {
+          _fetchRegistrations();
+        }
       },
       onDelete: (team) => _showDeleteConfirmation(team),
     );
-  }
-
-  Future<void> _openScanner() async {
-    final scannedCode = await Navigator.push<String>(
-      context,
-      MaterialPageRoute(builder: (context) => const QRScannerScreen()),
-    );
-
-    if (scannedCode == null || !mounted) return;
-
-    final team = _allRegistrations.firstWhere(
-      (t) => t['team_code'] == scannedCode,
-      orElse: () => {},
-    );
-
-    if (team.isEmpty) {
-      showFeedbackSnackbar(
-        context,
-        'Error: Team code "$scannedCode" not found.',
-        type: FeedbackType.error,
-      );
-      return;
-    }
-
-    if (team['is_checked_in'] == true) {
-      showFeedbackSnackbar(
-        context,
-        'Team "${team['team_name']}" is already checked in.',
-        type: FeedbackType.info,
-      );
-      return;
-    }
-
-    final bool? confirm = await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirm Check-in'),
-        content: Text(
-          'Do you want to check in Team "${team['team_name']}" (${team['team_code']})?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Check In'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      try {
-        await supabase
-            .from('registrations')
-            .update({'is_checked_in': true})
-            .eq('team_code', scannedCode);
-        showFeedbackSnackbar(
-          context,
-          'Successfully checked in ${team['team_name']}!',
-          type: FeedbackType.success,
-        );
-        _fetchRegistrations();
-      } catch (e) {
-        showFeedbackSnackbar(
-          context,
-          'An error occurred: ${e.toString()}',
-          type: FeedbackType.error,
-        );
-      }
-    }
   }
 
   Future<void> _showDeleteConfirmation(Map<String, dynamic> team) async {
@@ -237,11 +173,21 @@ class _TeamsScreenState extends State<TeamsScreen> {
               ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const Spacer(),
+            // UPDATED: Replaced scanner icon with Add Team icon
             IconButton(
-              onPressed: _openScanner,
-              icon: const Icon(Icons.qr_code_scanner),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AddTeamScreen(),
+                  ),
+                ).then(
+                  (_) => _fetchRegistrations(),
+                ); // Refresh after potentially adding a new team
+              },
+              icon: const Icon(Icons.group_add_outlined),
               iconSize: 32,
-              tooltip: 'Scan to Check In',
+              tooltip: 'Add New Team',
             ),
           ],
         ),
@@ -279,6 +225,14 @@ class _TeamsScreenState extends State<TeamsScreen> {
                   'Registered Teams (${_filteredRegistrations.length})',
                 ),
                 rowsPerPage: 20,
+                // NEW: Restore the table to the last viewed page
+                initialFirstRowIndex: _firstRowIndex,
+                // NEW: Save the page index when the user changes pages
+                onPageChanged: (rowIndex) {
+                  setState(() {
+                    _firstRowIndex = rowIndex;
+                  });
+                },
                 showCheckboxColumn: false,
                 columns: [
                   const DataColumn(label: Text('Team Code')),
@@ -360,12 +314,4 @@ class _TeamDataSource extends DataTableSource {
   int get rowCount => data.length;
   @override
   int get selectedRowCount => 0;
-}
-
-/// Soft deletes a team by setting its status to 'inactive'.
-Future<void> deleteTeam(int teamId) async {
-  await supabase
-      .from('registrations')
-      .update({'status': 'inactive'})
-      .eq('id', teamId);
 }

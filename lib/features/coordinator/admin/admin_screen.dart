@@ -19,6 +19,9 @@ class _AdminScreenState extends State<AdminScreen> {
   bool _isLoading = true;
   _AdminDataSource? _dataSource;
 
+  // NEW: State variable to remember the current page index
+  int _firstRowIndex = 0;
+
   @override
   void initState() {
     super.initState();
@@ -175,6 +178,15 @@ class _AdminScreenState extends State<AdminScreen> {
             : PaginatedDataTable(
                 header: Text('All Teams (${_allTeams.length})'),
                 rowsPerPage: 20,
+                // NEW: Restore the table to the last viewed page
+                initialFirstRowIndex: _firstRowIndex,
+                // NEW: Save the page index when the user changes pages
+                onPageChanged: (rowIndex) {
+                  setState(() {
+                    _firstRowIndex = rowIndex;
+                  });
+                },
+
                 showCheckboxColumn: true,
                 columns: const [
                   DataColumn(label: Text('Team Code')),

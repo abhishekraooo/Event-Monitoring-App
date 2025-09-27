@@ -157,7 +157,57 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
   }
 }
 
-// You can move this StatCard to a shared file later
+// Data Source for the new attendance table
+class _AttendanceDataSource extends DataTableSource {
+  final List<Map<String, dynamic>> data;
+  _AttendanceDataSource({required this.data});
+
+  @override
+  DataRow? getRow(int index) {
+    if (index >= data.length) return null;
+    final team = data[index];
+    final total = team['total_members'] ?? 0;
+    final present = team['present_members'] ?? 0;
+    String statusText;
+    Color statusColor;
+
+    if (present == 0) {
+      statusText = 'None Present (0/$total)';
+      statusColor = Colors.grey;
+    } else if (present == total) {
+      statusText = 'All Present ($present/$total)';
+      statusColor = Colors.green;
+    } else {
+      statusText = 'Partial ($present/$total)';
+      statusColor = Colors.orange;
+    }
+
+    return DataRow(
+      cells: [
+        DataCell(Text(team['team_code'] ?? '')),
+        DataCell(Text(team['team_name'] ?? '')),
+        DataCell(
+          Row(
+            children: [
+              Icon(Icons.circle, color: statusColor, size: 12),
+              const SizedBox(width: 8),
+              Text(statusText),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  bool get isRowCountApproximate => false;
+  @override
+  int get rowCount => data.length;
+  @override
+  int get selectedRowCount => 0;
+}
+
+// You can move StatCard to a shared file later
 class StatCard extends StatelessWidget {
   final String title;
   final String value;

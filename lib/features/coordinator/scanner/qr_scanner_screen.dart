@@ -30,7 +30,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
           MobileScanner(
             controller: controller,
             onDetect: (BarcodeCapture capture) async {
-              print("Scanner detected ${capture.barcodes.length} barcode(s).");
+              print("Scanner raw value: ${capture.barcodes.first.rawValue}");
 
               if (!_isProcessing) {
                 _isProcessing = true;
