@@ -1,44 +1,59 @@
-// lib/features/coordinator/attendance/attendance_check_in_screen.dart
+// lib/features/coordinator/attendance/member_status_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:event_management_app/core/services/database_service.dart';
 import 'package:event_management_app/core/utils/snackbar_utils.dart';
 
-class AttendanceCheckInScreen extends StatefulWidget {
+enum StatusMode { attendance, food }
+
+class MemberStatusScreen extends StatefulWidget {
   final int teamId;
   final String teamName;
+  final StatusMode mode;
 
-  const AttendanceCheckInScreen({
+  const MemberStatusScreen({
     super.key,
     required this.teamId,
     required this.teamName,
+    required this.mode,
   });
 
   @override
-  State<AttendanceCheckInScreen> createState() =>
-      _AttendanceCheckInScreenState();
+  State<MemberStatusScreen> createState() => _MemberStatusScreenState();
 }
 
-class _AttendanceCheckInScreenState extends State<AttendanceCheckInScreen> {
+class _MemberStatusScreenState extends State<MemberStatusScreen> {
   final DatabaseService _dbService = DatabaseService();
   late Future<List<Map<String, dynamic>>> _participantsFuture;
+
+  late String _title;
+  late String _dbColumn;
 
   @override
   void initState() {
     super.initState();
     _participantsFuture = _dbService.getParticipantsForTeam(widget.teamId);
+
+    switch (widget.mode) {
+      case StatusMode.attendance:
+        _title = 'Attendance: ${widget.teamName}';
+        _dbColumn = 'is_present';
+        break;
+      case StatusMode.food:
+        _title = 'Food Count: ${widget.teamName}';
+        _dbColumn = 'lunch_claimed';
+        break;
+    }
   }
 
-  Future<void> _updateAttendance(int participantId, bool isPresent) async {
+  Future<void> _updateStatus(int participantId, bool newStatus) async {
     try {
-      await _dbService.updateParticipant(participantId, {
-        'is_present': isPresent,
-      });
+      await _dbService.updateParticipant(participantId, {_dbColumn: newStatus});
     } catch (e) {
       if (mounted) {
         showFeedbackSnackbar(
           context,
-          'Error updating attendance: $e',
+          'Error updating status: $e',
           type: FeedbackType.error,
         );
       }
@@ -48,17 +63,16 @@ class _AttendanceCheckInScreenState extends State<AttendanceCheckInScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Attendance: ${widget.teamName}')),
+      appBar: AppBar(title: Text(_title)),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _participantsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          if (snapshot.hasError ||
+              !snapshot.hasData ||
+              snapshot.data!.isEmpty) {
             return const Center(
               child: Text('No participants found for this team.'),
             );
@@ -79,14 +93,12 @@ class _AttendanceCheckInScreenState extends State<AttendanceCheckInScreen> {
                   ),
                   subtitle: Text(participant['college'] ?? 'No College'),
                   trailing: Switch(
-                    value: participant['is_present'] ?? false,
+                    value: participant[_dbColumn] ?? false,
                     onChanged: (newValue) {
                       setState(() {
-                        // Optimistically update the UI
-                        participant['is_present'] = newValue;
+                        participant[_dbColumn] = newValue;
                       });
-                      // Trigger the database update
-                      _updateAttendance(participant['id'], newValue);
+                      _updateStatus(participant['id'], newValue);
                     },
                   ),
                 ),

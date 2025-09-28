@@ -1,51 +1,42 @@
-// lib/features/coordinator/attendance/attendance_dashboard_screen.dart
+// lib/features/coordinator/food/food_count_dashboard_screen.dart
 
-import 'package:event_management_app/features/coordinator/attendance/member_status_screen.dart';
 import 'package:event_management_app/features/coordinator/attendance/team_check_in_screen.dart';
-import 'package:event_management_app/features/coordinator/scanner/qr_scanner_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:event_management_app/core/services/database_service.dart';
 import 'package:event_management_app/core/utils/snackbar_utils.dart';
-// Note: We will create the check-in screen in the next step
-// import 'package:event_management_app/features/coordinator/attendance/attendance_check_in_screen.dart';
-// import 'package:event_management_app/features/coordinator/scanner/qr_scanner_screen.dart';
+import 'package:event_management_app/features/coordinator/attendance/member_status_screen.dart';
+import 'package:event_management_app/features/coordinator/scanner/qr_scanner_screen.dart';
 
-class AttendanceDashboardScreen extends StatefulWidget {
-  const AttendanceDashboardScreen({super.key});
-
+class FoodCountDashboardScreen extends StatefulWidget {
+  const FoodCountDashboardScreen({super.key});
   @override
-  State<AttendanceDashboardScreen> createState() =>
-      _AttendanceDashboardScreenState();
+  State<FoodCountDashboardScreen> createState() =>
+      _FoodCountDashboardScreenState();
 }
 
-class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
+class _FoodCountDashboardScreenState extends State<FoodCountDashboardScreen> {
   final DatabaseService _dbService = DatabaseService();
-  late Future<List<Map<String, dynamic>>> _statsFuture;
+  late Future<List<Map<String, dynamic>>> _participantsFuture;
 
   @override
   void initState() {
     super.initState();
-    _statsFuture = _dbService.getParticipantStats();
+    _participantsFuture = _dbService.getParticipantStats();
   }
 
   Future<void> _refreshData() async {
     setState(() {
-      _statsFuture = _dbService.getParticipantStats();
+      _participantsFuture = _dbService.getParticipantStats();
     });
   }
 
-  // UPDATED: This function is now fully implemented
   Future<void> _openScanner() async {
     final scannedCode = await Navigator.push<String>(
       context,
       MaterialPageRoute(builder: (context) => const QRScannerScreen()),
     );
-
     if (scannedCode == null || !mounted) return;
-
-    // Use the service to find the team by its code
     final team = await _dbService.getTeamByCode(scannedCode);
-
     if (team == null) {
       showFeedbackSnackbar(
         context,
@@ -54,7 +45,6 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
       );
       return;
     }
-
     if (mounted) {
       await Navigator.push(
         context,
@@ -63,7 +53,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
             teamId: team['id'],
             teamName: team['team_name'],
             teamCode: team['team_code'],
-            mode: CheckInMode.attendance, // Pass the correct mode
+            mode: CheckInMode.food, // Pass the correct mode
           ),
         ),
       );
@@ -76,7 +66,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: FutureBuilder<List<Map<String, dynamic>>>(
-        future: _statsFuture,
+        future: _participantsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -89,20 +79,9 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
           }
 
           final participants = snapshot.data!;
-
-          // Calculate stats
           final totalParticipants = participants.length;
-          final presentParticipants = participants
-              .where((p) => p['is_present'] == true)
-              .length;
-          final totalTeams = participants
-              .map((p) => p['registrations']['id'])
-              .toSet()
-              .length;
-          final presentTeams = participants
-              .where((p) => p['is_present'] == true)
-              .map((p) => p['registrations']['id'])
-              .toSet()
+          final lunchesServed = participants
+              .where((p) => p['lunch_claimed'] == true)
               .length;
 
           return ListView(
@@ -110,7 +89,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
               Row(
                 children: [
                   Text(
-                    'Attendance Overview',
+                    'Food Count',
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -125,31 +104,17 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
                   ElevatedButton.icon(
                     onPressed: _openScanner,
                     icon: const Icon(Icons.qr_code_scanner),
-                    label: const Text('Scan for Attendance'),
+                    label: const Text('Scan for Lunch'),
                   ),
                 ],
               ),
               const SizedBox(height: 24),
-              Wrap(
-                spacing: 16.0,
-                runSpacing: 16.0,
-                children: [
-                  StatCard(
-                    title: 'Participants Present',
-                    value: '$presentParticipants / $totalParticipants',
-                    icon: Icons.person_add_outlined,
-                    color: Colors.green.shade700,
-                  ),
-                  StatCard(
-                    title: 'Teams Present',
-                    value: '$presentTeams / $totalTeams',
-                    icon: Icons.group_work,
-                    color: Colors.blue.shade700,
-                  ),
-                ],
+              StatCard(
+                title: 'Lunches Served',
+                value: '$lunchesServed / $totalParticipants',
+                icon: Icons.restaurant,
+                color: Colors.brown.shade700,
               ),
-              const SizedBox(height: 16),
-              // We can add the team status data table here later if needed
             ],
           );
         },
@@ -158,57 +123,7 @@ class _AttendanceDashboardScreenState extends State<AttendanceDashboardScreen> {
   }
 }
 
-// Data Source for the new attendance table
-class _AttendanceDataSource extends DataTableSource {
-  final List<Map<String, dynamic>> data;
-  _AttendanceDataSource({required this.data});
-
-  @override
-  DataRow? getRow(int index) {
-    if (index >= data.length) return null;
-    final team = data[index];
-    final total = team['total_members'] ?? 0;
-    final present = team['present_members'] ?? 0;
-    String statusText;
-    Color statusColor;
-
-    if (present == 0) {
-      statusText = 'None Present (0/$total)';
-      statusColor = Colors.grey;
-    } else if (present == total) {
-      statusText = 'All Present ($present/$total)';
-      statusColor = Colors.green;
-    } else {
-      statusText = 'Partial ($present/$total)';
-      statusColor = Colors.orange;
-    }
-
-    return DataRow(
-      cells: [
-        DataCell(Text(team['team_code'] ?? '')),
-        DataCell(Text(team['team_name'] ?? '')),
-        DataCell(
-          Row(
-            children: [
-              Icon(Icons.circle, color: statusColor, size: 12),
-              const SizedBox(width: 8),
-              Text(statusText),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  @override
-  bool get isRowCountApproximate => false;
-  @override
-  int get rowCount => data.length;
-  @override
-  int get selectedRowCount => 0;
-}
-
-// You can move StatCard to a shared file later
+// FIX: The full implementation of the StatCard widget is now included.
 class StatCard extends StatelessWidget {
   final String title;
   final String value;

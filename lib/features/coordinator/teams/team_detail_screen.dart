@@ -1,9 +1,9 @@
 // lib/features/coordinator/teams/team_detail_screen.dart
 
-import 'package:event_management_app/core/services/database_service.dart';
-import 'package:event_management_app/core/utils/snackbar_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:event_management_app/core/services/database_service.dart';
+import 'package:event_management_app/core/utils/snackbar_utils.dart';
 
 class TeamDetailScreen extends StatefulWidget {
   final int teamId;
@@ -227,6 +227,128 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
     }
   }
 
+  Future<void> _showAddMemberDialog() async {
+    final formKey = GlobalKey<FormState>();
+    final nameController = TextEditingController();
+    final emailController = TextEditingController();
+    final numberController = TextEditingController();
+
+    final bool? didSave = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add New Member'),
+        content: Form(
+          key: formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Name'),
+                  validator: (v) => v!.isEmpty ? 'Required' : null,
+                ),
+                TextFormField(
+                  controller: emailController,
+                  decoration: const InputDecoration(labelText: 'Email'),
+                ),
+                TextFormField(
+                  controller: numberController,
+                  decoration: const InputDecoration(labelText: 'Number'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (formKey.currentState?.validate() ?? false) {
+                final newParticipant = {
+                  'team_id': widget.teamId,
+                  'name': nameController.text.trim(),
+                  'email': emailController.text.trim(),
+                  'number': numberController.text.trim(),
+                  'is_team_lead': false,
+                };
+                try {
+                  await _dbService.addParticipant(newParticipant);
+                  if (mounted) Navigator.of(context).pop(true);
+                } catch (e) {
+                  if (mounted)
+                    showFeedbackSnackbar(
+                      context,
+                      'Error: $e',
+                      type: FeedbackType.error,
+                    );
+                }
+              }
+            },
+            child: const Text('Add Member'),
+          ),
+        ],
+      ),
+    );
+
+    nameController.dispose();
+    emailController.dispose();
+    numberController.dispose();
+
+    if (didSave == true) {
+      showFeedbackSnackbar(
+        context,
+        'New member added successfully!',
+        type: FeedbackType.success,
+      );
+      _loadData();
+    }
+  }
+
+  Future<void> _showDeleteConfirmationDialog(
+    Map<String, dynamic> participantData,
+  ) async {
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Deletion'),
+        content: Text(
+          'Are you sure you want to remove ${participantData['name']} from this team?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _dbService.deleteParticipant(participantData['id']);
+        showFeedbackSnackbar(
+          context,
+          'Member removed successfully!',
+          type: FeedbackType.success,
+        );
+        _loadData();
+      } catch (e) {
+        showFeedbackSnackbar(context, 'Error: $e', type: FeedbackType.error);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -280,6 +402,17 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
               };
               return _buildSectionCard(title, details, participant);
             }).toList(),
+            if (_userRole == 'admin')
+              Padding(
+                padding: const EdgeInsets.only(top: 16.0),
+                child: Center(
+                  child: ElevatedButton.icon(
+                    onPressed: _showAddMemberDialog,
+                    icon: const Icon(Icons.person_add_alt_1_outlined),
+                    label: const Text('Add New Member'),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -332,6 +465,19 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
                             _showEditParticipantDialog(dataForEditing, title);
                           }
                         },
+                      ),
+                    if (_userRole == 'admin' &&
+                        dataForEditing != null &&
+                        dataForEditing['is_team_lead'] == false)
+                      IconButton(
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          size: 20,
+                          color: Colors.red,
+                        ),
+                        tooltip: 'Delete Member',
+                        onPressed: () =>
+                            _showDeleteConfirmationDialog(dataForEditing),
                       ),
                   ],
                 ),

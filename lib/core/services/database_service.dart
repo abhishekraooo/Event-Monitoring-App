@@ -87,16 +87,16 @@ class DatabaseService {
         .order('id');
   }
 
-  /// Finds a team's basic info using its unique team_code.
   Future<Map<String, dynamic>?> getTeamByCode(String teamCode) async {
     try {
+      // Add 'team_code' to the select query
       return await supabase
           .from('registrations')
-          .select('id, team_name')
+          .select('id, team_name, team_code')
           .eq('team_code', teamCode)
           .single();
     } catch (e) {
-      return null; // Return null if not found
+      return null;
     }
   }
 
@@ -118,5 +118,25 @@ class DatabaseService {
   /// Creates a new team and its participants using a database function.
   Future<void> createNewTeam(Map<String, dynamic> teamData) async {
     await supabase.rpc('create_new_team', params: {'team_data': teamData});
+  }
+
+  /// Updates the status for a list of participants using the database function.
+  Future<void> bulkUpdateParticipantStatus(
+    List<Map<String, dynamic>> updates,
+  ) async {
+    await supabase.rpc(
+      'bulk_update_participant_status',
+      params: {'updates': updates},
+    );
+  }
+
+  /// Adds a new participant to a team.
+  Future<void> addParticipant(Map<String, dynamic> participantData) async {
+    await supabase.from('participants').insert(participantData);
+  }
+
+  /// Deletes a participant from a team.
+  Future<void> deleteParticipant(int participantId) async {
+    await supabase.from('participants').delete().eq('id', participantId);
   }
 }

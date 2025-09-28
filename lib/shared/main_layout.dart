@@ -1,14 +1,16 @@
 // lib/features/coordinator/shared/main_layout.dart
 
 import 'package:event_management_app/core/utils/snackbar_utils.dart';
-import 'package:flutter/material.dart';
-import 'package:event_management_app/features/coordinator/admin/admin_screen.dart';
-import 'package:event_management_app/features/coordinator/attendance/attendance_dashboard_screen.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:event_management_app/features/coordinator/dashboard/dashboard_screen.dart';
-import 'package:event_management_app/features/coordinator/teams/teams_screen.dart';
-import 'package:event_management_app/core/services/database_service.dart';
 import 'package:event_management_app/main.dart';
+import 'package:flutter/material.dart';
+import 'package:event_management_app/features/coordinator/attendance/attendance_dashboard_screen.dart';
+import 'package:event_management_app/features/coordinator/food/food_count_dashboard_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:event_management_app/features/coordinator/teams/teams_screen.dart';
+import 'package:event_management_app/features/coordinator/dashboard/dashboard_screen.dart';
+import 'package:event_management_app/features/coordinator/admin/admin_screen.dart';
+import 'package:event_management_app/core/services/database_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -64,13 +66,8 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   void _onSelectItem(int index) {
-    // This logic prevents out-of-bounds errors if the admin tab isn't visible
-    final adminIndex = 3;
-    final maxIndex = _userRole == 'admin' ? 3 : 2;
-    if (index > maxIndex) return;
-
     setState(() => _selectedIndex = index);
-    Navigator.pop(context); // Close drawer
+    Navigator.pop(context);
   }
 
   @override
@@ -79,64 +76,68 @@ class _MainLayoutState extends State<MainLayout> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    final List<Widget> screens = [
-      const DashboardScreen(),
-      const TeamsScreen(),
-      const AttendanceDashboardScreen(),
-      if (_userRole == 'admin') const AdminScreen(),
+    // --- Dynamically build the list of navigation items based on role ---
+    final List<Map<String, dynamic>> navItems = [
+      {
+        'label': 'Dashboard',
+        'icon': Icons.dashboard_outlined,
+        'selectedIcon': Icons.dashboard,
+        'screen': const DashboardScreen(),
+      },
+      {
+        'label': 'Teams',
+        'icon': Icons.list_alt_outlined,
+        'selectedIcon': Icons.list_alt,
+        'screen': const TeamsScreen(),
+      },
     ];
 
-    final List<NavigationRailDestination> navRailDestinations = [
-      const NavigationRailDestination(
-        icon: Icon(Icons.dashboard_outlined),
-        selectedIcon: Icon(Icons.dashboard),
-        label: Text('Dashboard'),
-      ),
-      const NavigationRailDestination(
-        icon: Icon(Icons.list_alt_outlined),
-        selectedIcon: Icon(Icons.list_alt),
-        label: Text('Teams'),
-      ),
-      const NavigationRailDestination(
-        icon: Icon(Icons.person_search_outlined),
-        selectedIcon: Icon(Icons.person_search),
-        label: Text('Attendance'),
-      ),
-      if (_userRole == 'admin')
-        const NavigationRailDestination(
-          icon: Icon(Icons.admin_panel_settings_outlined),
-          selectedIcon: Icon(Icons.admin_panel_settings),
-          label: Text('Admin'),
-        ),
-    ];
+    if (_userRole != 'viewer') {
+      navItems.add({
+        'label': 'Attendance',
+        'icon': Icons.person_search_outlined,
+        'selectedIcon': Icons.person_search,
+        'screen': const AttendanceDashboardScreen(),
+      });
+      navItems.add({
+        'label': 'Food Count',
+        'icon': Icons.restaurant_outlined,
+        'selectedIcon': Icons.restaurant,
+        'screen': const FoodCountDashboardScreen(),
+      });
+    }
 
-    final List<Widget> drawerItems = [
-      ListTile(
-        leading: const Icon(Icons.dashboard),
-        title: const Text('Dashboard'),
-        selected: _selectedIndex == 0,
-        onTap: () => _onSelectItem(0),
-      ),
-      ListTile(
-        leading: const Icon(Icons.list_alt),
-        title: const Text('Teams'),
-        selected: _selectedIndex == 1,
-        onTap: () => _onSelectItem(1),
-      ),
-      ListTile(
-        leading: const Icon(Icons.person_search),
-        title: const Text('Attendance'),
-        selected: _selectedIndex == 2,
-        onTap: () => _onSelectItem(2),
-      ),
-      if (_userRole == 'admin')
-        ListTile(
-          leading: const Icon(Icons.admin_panel_settings),
-          title: const Text('Admin'),
-          selected: _selectedIndex == 3,
-          onTap: () => _onSelectItem(3),
-        ),
-    ];
+    if (_userRole == 'admin') {
+      navItems.add({
+        'label': 'Admin',
+        'icon': Icons.admin_panel_settings_outlined,
+        'selectedIcon': Icons.admin_panel_settings,
+        'screen': const AdminScreen(),
+      });
+    }
+    // --- END of dynamic list building ---
+
+    // Generate the UI components from the dynamic list
+    final screens = navItems.map<Widget>((item) => item['screen']).toList();
+    final navRailDestinations = navItems
+        .map<NavigationRailDestination>(
+          (item) => NavigationRailDestination(
+            icon: Icon(item['icon']),
+            selectedIcon: Icon(item['selectedIcon']),
+            label: Text(item['label']),
+          ),
+        )
+        .toList();
+    final drawerItems = navItems.asMap().entries.map<Widget>((entry) {
+      final index = entry.key;
+      final item = entry.value;
+      return ListTile(
+        leading: Icon(item['icon']),
+        title: Text(item['label']),
+        selected: _selectedIndex == index,
+        onTap: () => _onSelectItem(index),
+      );
+    }).toList();
 
     return LayoutBuilder(
       builder: (context, constraints) {

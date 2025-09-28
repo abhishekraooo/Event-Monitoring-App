@@ -40,11 +40,10 @@ class _TeamsScreenState extends State<TeamsScreen> {
   }
 
   // NEW: Method to handle the export process
+  // REWRITTEN: This method now correctly formats the data for your specified columns.
   Future<void> _exportData() async {
     setState(() => _isLoadingExport = true);
-
     try {
-      // Fetch fresh, complete data for the export
       final allTeamsWithAllParticipants = await supabase
           .from('registrations')
           .select('*, participants(*)')
@@ -54,18 +53,14 @@ class _TeamsScreenState extends State<TeamsScreen> {
       final List<String> headers = [
         'team_code',
         'team_name',
+        'idea_title',
+        'idea_abstract',
         'lead_name',
         'lead_email',
         'lead_number',
         'member_1_name',
-        'member_1_email',
-        'member_1_number',
         'member_2_name',
-        'member_2_email',
-        'member_2_number',
         'member_3_name',
-        'member_3_email',
-        'member_3_number',
       ];
 
       List<List<dynamic>> rows = [];
@@ -84,33 +79,30 @@ class _TeamsScreenState extends State<TeamsScreen> {
             .toList();
 
         List<dynamic> row = [
-          team['team_code'],
-          team['team_name'],
-          team['idea_title'],
-          team['idea_abstract'],
-          lead['name'],
-          lead['email'],
-          lead['number'],
-          members.isNotEmpty ? members[0]['name'] : '',
-          members.length > 1 ? members[1]['name'] : '',
-          members.length > 2 ? members[2]['name'] : '',
+          team['team_code'] ?? '',
+          team['team_name'] ?? '',
+          team['idea_title'] ?? '',
+          team['idea_abstract'] ?? '',
+          lead['name'] ?? '',
+          lead['email'] ?? '',
+          lead['number'] ?? '',
+          members.isNotEmpty ? members[0]['name'] ?? '' : '',
+          members.length > 1 ? members[1]['name'] ?? '' : '',
+          members.length > 2 ? members[2]['name'] ?? '' : '',
         ];
         rows.add(row);
       }
 
       _exportService.exportToCsv(rows, 'ideathon_registrations.csv');
     } catch (e) {
-      if (mounted) {
+      if (mounted)
         showFeedbackSnackbar(
           context,
           'Failed to export data: $e',
           type: FeedbackType.error,
         );
-      }
     } finally {
-      if (mounted) {
-        setState(() => _isLoadingExport = false);
-      }
+      if (mounted) setState(() => _isLoadingExport = false);
     }
   }
 
