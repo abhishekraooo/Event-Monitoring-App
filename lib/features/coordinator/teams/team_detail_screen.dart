@@ -493,12 +493,13 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
     );
   }
 
+  // UPDATED: This widget's layout has been changed
   Widget _buildDetailRow(String title, String? value) {
     if (value == null || value.isEmpty || value == 'null') {
       return const SizedBox.shrink();
     }
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      padding: const EdgeInsets.symmetric(vertical: 2.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -509,7 +510,22 @@ class _TeamDetailScreenState extends State<TeamDetailScreen> {
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
+          // The Expanded widget makes sure long text wraps correctly
           Expanded(child: Text(value)),
+          // This IconButton is now constrained to take up less space
+          IconButton(
+            padding: const EdgeInsets.only(
+              left: 8.0,
+            ), // Add padding only to the left
+            constraints:
+                const BoxConstraints(), // Removes default large padding
+            icon: const Icon(Icons.copy_outlined, size: 18, color: Colors.grey),
+            tooltip: 'Copy $title',
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: value));
+              showFeedbackSnackbar(context, '"$title" copied to clipboard!');
+            },
+          ),
         ],
       ),
     );

@@ -10,7 +10,6 @@ import 'package:event_management_app/features/coordinator/teams/teams_screen.dar
 import 'package:event_management_app/features/coordinator/dashboard/dashboard_screen.dart';
 import 'package:event_management_app/features/coordinator/admin/admin_screen.dart';
 import 'package:event_management_app/core/services/database_service.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});

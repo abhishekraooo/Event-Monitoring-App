@@ -1,6 +1,7 @@
 // lib/features/coordinator/attendance/attendance_dashboard_screen.dart
 
-import 'package:event_management_app/features/coordinator/attendance/member_status_screen.dart';
+// ignore_for_file: unused_element
+
 import 'package:event_management_app/features/coordinator/attendance/team_check_in_screen.dart';
 import 'package:event_management_app/features/coordinator/scanner/qr_scanner_screen.dart';
 import 'package:flutter/material.dart';

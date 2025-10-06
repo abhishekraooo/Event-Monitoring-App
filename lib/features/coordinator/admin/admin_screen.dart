@@ -39,8 +39,8 @@ class _AdminScreenState extends State<AdminScreen> {
       final results = await Future.wait([teamsFuture, coordinatorsFuture]);
       if (mounted) {
         setState(() {
-          _allTeams = results[0] as List<Map<String, dynamic>>;
-          _allCoordinators = results[1] as List<Map<String, dynamic>>;
+          _allTeams = results[0];
+          _allCoordinators = results[1];
           _dataSource = _createDataSource();
           _isLoading = false;
         });

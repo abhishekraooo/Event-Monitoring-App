@@ -4,7 +4,6 @@ import 'package:event_management_app/features/coordinator/attendance/team_check_
 import 'package:flutter/material.dart';
 import 'package:event_management_app/core/services/database_service.dart';
 import 'package:event_management_app/core/utils/snackbar_utils.dart';
-import 'package:event_management_app/features/coordinator/attendance/member_status_screen.dart';
 import 'package:event_management_app/features/coordinator/scanner/qr_scanner_screen.dart';
 
 class FoodCountDashboardScreen extends StatefulWidget {
